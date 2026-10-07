@@ -1,5 +1,18 @@
 # Melhorias Aplicadas — Ferramenta de Cobrança
 
+## 7. Sincronização na nuvem e PIX copia e cola
+
+- **Sincronização:** Configurações → Geral → "Sincronização na nuvem". Dados no
+  Upstash Redis (`tvbrcob-sync`, região gru1) via `api/sync.ts`; senha na env
+  `SYNC_PASSWORD` da Vercel (trocar = `vercel env rm/add` + redeploy).
+  Envia 2s após cada alteração, baixa ao abrir/voltar para a aba. Conflito:
+  vence o que chegou primeiro na nuvem.
+- **PIX copia e cola:** nome e cidade nas Configurações; variável
+  `{pix_copia_cola}` (valor do 1º plano da tabela, sozinha numa linha) e botão
+  de copiar o código no card. Anti-ban não altera essa linha.
+
+---
+
 ## 6. Revisão de bugs
 
 - Link do WhatsApp agora sempre leva o DDI 55 (antes `21 9...` abria número errado).
