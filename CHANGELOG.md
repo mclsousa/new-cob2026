@@ -1,5 +1,25 @@
 # Melhorias Aplicadas — Ferramenta de Cobrança
 
+## 6. Revisão de bugs
+
+- Link do WhatsApp agora sempre leva o DDI 55 (antes `21 9...` abria número errado).
+- Modo anti-ban não insere caracteres invisíveis dentro da chave PIX/links.
+- Lembrete disparava um dia antes (data lida em UTC) — corrigido.
+- IDs estáveis: a marca "Enviado" sobrevive a reprocessar/recarregar; mesmo
+  cliente carregado 2x não duplica.
+- Modo Foco: sem tela branca quando a lista encolhe; Fila avança 1 por vez e
+  mostra o relatório de envio manual ao terminar.
+- localStorage corrompido ou cheio não derruba mais o app; notificações não
+  quebram em navegadores sem suporte (iOS).
+- Recibo: valor vazio não vira "R$ NaN"; 31/01 + 1 mês = 28/02.
+- Spin `{a|b}` não come mais variáveis como `{pix}`.
+- Colar/Arquivo/Banco separam blocos e mantêm o tipo IPTV/P2P.
+- Links rápidos só abrem http(s). Ícones Tabler trocados por Lucide.
+- Removidos: `PaymentModal` (não usado), dependência `uuid`, define do Gemini.
+- `npm run check`: auto-teste da lógica crítica.
+
+---
+
 ## 5. Novo formato de relatório (relatorio-iptv.csv / relatorio-p2p.csv)
 
 - `normalizeCsvIfNeeded()` reconhece o relatório do painel pelo cabeçalho

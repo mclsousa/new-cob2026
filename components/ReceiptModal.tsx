@@ -96,8 +96,10 @@ const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, client, co
           baseDate = today;
       }
 
-      const newDate = new Date(baseDate);
-      newDate.setMonth(baseDate.getMonth() + months);
+      // Soma meses sem estourar o fim do mês (31/01 + 1 mês = 28/02, não 03/03)
+      const newDate = new Date(baseDate.getFullYear(), baseDate.getMonth() + months, 1);
+      const lastDay = new Date(newDate.getFullYear(), newDate.getMonth() + 1, 0).getDate();
+      newDate.setDate(Math.min(baseDate.getDate(), lastDay));
 
       setDate(toInputDate(newDate));
   };
@@ -165,7 +167,7 @@ const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, client, co
                     type="number"
                     step="0.01"
                     value={value}
-                    onChange={(e) => setValue(parseFloat(e.target.value))}
+                    onChange={(e) => setValue(parseFloat(e.target.value) || 0)}
                     className="w-full p-1.5 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 focus:ring-1 focus:ring-orange-500 outline-none text-xs"
                 />
             </div>

@@ -102,9 +102,12 @@ export const LinksSidebar: React.FC<LinksSidebarProps> = ({ isOpen, onClose, lin
                 <div key={link.id} className="group bg-white dark:bg-gray-700/50 p-3 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-500 transition-all shadow-sm hover:shadow-md">
                     <div className="flex items-center justify-between mb-1">
                         <span className="font-bold text-gray-800 dark:text-white text-sm">{link.label}</span>
-                        <a href={link.url} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-blue-500">
-                            <ExternalLink size={14} />
-                        </a>
+                        {/* só http(s): bloqueia "javascript:" vindo de backup/config */}
+                        {/^https?:\/\//i.test(link.url) && (
+                          <a href={link.url} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-blue-500">
+                              <ExternalLink size={14} />
+                          </a>
+                        )}
                     </div>
                     <div className="flex items-center gap-2">
                         <code className="flex-1 text-[10px] bg-gray-100 dark:bg-gray-800 p-1.5 rounded text-gray-500 truncate font-mono">

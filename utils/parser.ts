@@ -1,6 +1,7 @@
 import { ParsedClient } from '../types';
 
-const generateId = () => Math.random().toString(36).substring(2, 15);
+// ID estável (tipo + nome): a marca de "enviado" sobrevive a reprocessar e recarregar
+const stableId = (type: string, name: string) => `${type}:${name.toLowerCase()}`;
 
 // Regex to find a date: DD/MM/YYYY optionally followed by HH:mm(:ss)
 const DATE_REGEX = /(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}):(\d{2})(?::(\d{2})?)?)?/;
@@ -41,7 +42,7 @@ export const parseClientData = (text: string, forceP2PCheck: boolean = false): P
 
   lines.forEach((line) => {
     const trimmedLine = line.trim();
-    if (!trimmedLine) return;
+    if (!trimmedLine) { section = null; return; } // linha em branco encerra a seção
 
     const sectionMatch = trimmedLine.match(/^Clientes (IPTV|P2P)/i);
     if (sectionMatch) {
@@ -75,7 +76,7 @@ export const parseClientData = (text: string, forceP2PCheck: boolean = false): P
                 const rawNotes = line.substring(notesStartIndex).trim();
 
                 entries.push({
-                    id: generateId(),
+                    id: '',
                     name: pendingPartial.name,
                     dueDate: dueDate,
                     rawNotes: rawNotes,
@@ -110,7 +111,7 @@ export const parseClientData = (text: string, forceP2PCheck: boolean = false): P
                 const rawNotes = line.substring(notesStartIndex).trim();
 
                 entries.push({
-                    id: generateId(),
+                    id: '',
                     name: name,
                     dueDate: dueDate,
                     rawNotes: rawNotes,
@@ -132,7 +133,7 @@ export const parseClientData = (text: string, forceP2PCheck: boolean = false): P
                 const rawNotes = line.substring(notesStartIndex).trim();
 
                 entries.push({
-                    id: generateId(),
+                    id: '',
                     name: name,
                     dueDate: dueDate,
                     rawNotes: rawNotes,
@@ -168,7 +169,15 @@ export const parseClientData = (text: string, forceP2PCheck: boolean = false): P
     }
   });
 
-  return { parsedEntries: entries, invalidLinesCount };
+  // Mesmo cliente colado/carregado duas vezes: fica a última ocorrência (mais recente)
+  const unique = new Map<string, ParsedClient>();
+  for (const e of entries) {
+    const id = stableId(e.type, e.name);
+    unique.delete(id);
+    unique.set(id, { ...e, id });
+  }
+
+  return { parsedEntries: [...unique.values()], invalidLinesCount };
 };
 
 export const detectInputType = (text: string): boolean => {
@@ -216,7 +225,9 @@ const splitCsvLine = (line: string, sep: string): string[] => {
     return cells;
 };
 
-const normHeader = (h: string) => h.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+const normHeader = (h: string) => h.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().trim();
+
+const BOM = String.fromCharCode(0xfeff);
 
 /**
  * Relatório do painel (relatorio-iptv.csv / relatorio-p2p.csv):
@@ -250,21 +261,48 @@ const convertPanelReport = (lines: string[], sep: string): string | null => {
     return out.join('\n');
 };
 
+const detectSep = (line: string): string | null => {
+    const count = (ch: string) => line.split(ch).length - 1;
+    const [sep, n] = (['\t', ';', ','] as const)
+        .map(ch => [ch, count(ch)] as const)
+        .sort((a, b) => b[1] - a[1])[0];
+    return n >= 3 ? sep : null;
+};
+
+// Linha de cabeçalho do relatório do painel (tem Login e Vencimento)
+const isPanelHeader = (line: string): boolean => {
+    const sep = detectSep(line);
+    if (!sep) return false;
+    const cells = splitCsvLine(line, sep).map(normHeader);
+    return cells.includes('login') && cells.some(c => c.startsWith('vencimento'));
+};
+
+/**
+ * Normaliza o texto de entrada (arquivo, botão Colar ou Ctrl+V direto no campo).
+ * Idempotente: pode rodar de novo sobre texto já normalizado.
+ * Cada bloco que começa num cabeçalho do relatório do painel vira linhas limpas;
+ * o resto (formato antigo) passa intacto, salvo CSV genérico sem cabeçalho.
+ */
 export const normalizeCsvIfNeeded = (input: string): string => {
-    const text = input.replace(/^﻿/, '').replace(/\r/g, '');
-    const firstLine = text.split('\n').find(l => l.trim()) || '';
-    const semicolons = (firstLine.match(/;/g) || []).length;
-    const commas = (firstLine.match(/,/g) || []).length;
-    const looksLikeCsv = semicolons >= 3 || commas >= 3;
-    if (!looksLikeCsv) return text;
+    // BOM pode aparecer no meio quando dois arquivos são colados em sequência
+    const text = input.split(BOM).join('').replace(/\r/g, '');
+    const lines = text.split('\n');
+    const headerIdx = lines.map((l, i) => (isPanelHeader(l) ? i : -1)).filter(i => i >= 0);
 
-    const sep = semicolons >= commas ? ';' : ',';
-    const lines = text.split('\n').filter(l => l.trim());
-    const report = convertPanelReport(lines, sep);
-    if (report !== null) return report;
+    if (headerIdx.length > 0) {
+        const out = lines.slice(0, headerIdx[0]);
+        headerIdx.forEach((start, n) => {
+            const block = lines.slice(start, headerIdx[n + 1] ?? lines.length);
+            out.push(convertPanelReport(block.filter(l => l.trim()), detectSep(block[0])!) ?? block.join('\n'));
+        });
+        return out.join('\n');
+    }
 
-    return text
-        .split('\n')
-        .map(line => line.split(sep).map(c => c.trim().replace(/^"|"$/g, '')).join(' '))
+    // CSV genérico (sem cabeçalho reconhecido): achata as células com espaço
+    const firstLine = lines.find(l => l.trim()) || '';
+    const sep = detectSep(firstLine);
+    if (!sep) return text;
+    return lines
+        .map(line => splitCsvLine(line, sep).join(' '))
         .join('\n');
 };

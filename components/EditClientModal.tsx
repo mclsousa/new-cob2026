@@ -20,8 +20,9 @@ const EditClientModal: React.FC<EditClientModalProps> = ({ isOpen, onClose, clie
     notesWithoutPhone: string;
     customNotes: string;
     customMessage: string;
+    customPix: string;
     tags: string[];
-  }>({ name: '', dueDate: '', phone: '', notesWithoutPhone: '', customNotes: '', customMessage: '', tags: [] });
+  }>({ name: '', dueDate: '', phone: '', notesWithoutPhone: '', customNotes: '', customMessage: '', customPix: '', tags: [] });
 
   useEffect(() => {
     if (client) {
@@ -38,6 +39,7 @@ const EditClientModal: React.FC<EditClientModalProps> = ({ isOpen, onClose, clie
         notesWithoutPhone: cleanText,
         customNotes: client.customNotes || '',
         customMessage: client.customMessage || '',
+        customPix: client.customPix || '',
         tags: client.tags || []
       });
     }
@@ -58,10 +60,10 @@ const EditClientModal: React.FC<EditClientModalProps> = ({ isOpen, onClose, clie
     const isExpired = vencCheck < hoje;
     const template = isExpired ? config.templates.expired : config.templates.normal;
 
-    // Load the template with Dynamic Tags PRESERVED ({nome}, {vencimento})
-    let preFilled = template
-      .replace(/{pix}/g, config.pixKey);
-      
+    // Load the template with Dynamic Tags PRESERVED ({nome}, {vencimento}, {pix}).
+    // {pix} fica como variável para acompanhar a chave das Configurações.
+    let preFilled = template;
+
     // Legacy replacement support if template still has them, though new uses {tabela_precos} handled by ClientCard.
     // However, when editing a custom message, the user probably wants the prices hardcoded in the text or the placeholder {tabela_precos}.
     // We will leave {tabela_precos} as is, so it updates dynamically.
@@ -111,6 +113,7 @@ const EditClientModal: React.FC<EditClientModalProps> = ({ isOpen, onClose, clie
       rawNotes: newRawNotes,
       customNotes: formData.customNotes,
       customMessage: formData.customMessage,
+      customPix: formData.customPix.trim(),
       tags: formData.tags
     });
   };
@@ -209,6 +212,18 @@ const EditClientModal: React.FC<EditClientModalProps> = ({ isOpen, onClose, clie
                 onChange={e => setFormData({...formData, phone: e.target.value})}
                 className="w-full p-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 focus:ring-2 focus:ring-primary focus:outline-none"
               />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Chave PIX personalizada</label>
+              <input
+                type="text"
+                placeholder={`Padrão: ${config.pixKey}`}
+                value={formData.customPix}
+                onChange={e => setFormData({...formData, customPix: e.target.value})}
+                className="w-full p-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 focus:ring-2 focus:ring-primary focus:outline-none"
+              />
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Deixe vazio para usar a chave das Configurações.</p>
             </div>
 
             {/* Custom Message Section */}

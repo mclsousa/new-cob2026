@@ -2,6 +2,14 @@
 import React, { useState, useEffect } from 'react';
 import { ParsedClient } from '../types';
 import { Bell, X, BellRing, AlertCircle } from 'lucide-react';
+import { toInputDate } from '../utils/helpers';
+
+// "AAAA-MM-DD" + "HH:mm" no fuso LOCAL (new Date('AAAA-MM-DD') seria meia-noite UTC = dia anterior no Brasil)
+const toLocalDateTime = (date: string, time: string): Date => {
+  const [y, mo, d] = date.split('-').map(Number);
+  const [h, m] = time.split(':').map(Number);
+  return new Date(y, mo - 1, d, h, m, 0, 0);
+};
 
 interface ReminderModalProps {
   client: ParsedClient | null;
@@ -18,7 +26,7 @@ const ReminderModal: React.FC<ReminderModalProps> = ({ client, defaultTime, onCl
   useEffect(() => {
     if (client) {
       const today = new Date();
-      setSelectedDate(today.toISOString().split('T')[0]);
+      setSelectedDate(toInputDate(today));
       setSelectedTime(defaultTime || '20:00');
       if ('Notification' in window) setNotifPerm(Notification.permission);
     }
@@ -34,23 +42,18 @@ const ReminderModal: React.FC<ReminderModalProps> = ({ client, defaultTime, onCl
   const setQuickDate = (offsetDays: number) => {
     const d = new Date();
     d.setDate(d.getDate() + offsetDays);
-    setSelectedDate(d.toISOString().split('T')[0]);
+    setSelectedDate(toInputDate(d));
   };
 
   const handleConfirm = () => {
     if (!selectedDate || !selectedTime) return;
-    const [h, m] = selectedTime.split(':').map(Number);
-    const dt = new Date(selectedDate);
-    dt.setHours(h, m, 0, 0);
-    onConfirm(client, dt.getTime());
+    onConfirm(client, toLocalDateTime(selectedDate, selectedTime).getTime());
     onClose();
   };
 
   const scheduledLabel = (() => {
     if (!selectedDate || !selectedTime) return '';
-    const [h, m] = selectedTime.split(':').map(Number);
-    const dt = new Date(selectedDate);
-    dt.setHours(h, m, 0, 0);
+    const dt = toLocalDateTime(selectedDate, selectedTime);
     const today = new Date(); today.setHours(0,0,0,0);
     const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
     const dtDay = new Date(dt); dtDay.setHours(0,0,0,0);

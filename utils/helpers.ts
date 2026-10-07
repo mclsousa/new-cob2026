@@ -36,26 +36,21 @@ export const formatCurrency = (value: number): string => {
 };
 
 // Process Spin Syntax {a|b|c}
+// Só blocos com "|" são sorteados: {nome}, {pix} etc. que sobrarem ficam intactos.
 export const processSpinSyntax = (text: string): string => {
-  return text.replace(/\{([^{}]+)\}/g, (match, content) => {
+  return text.replace(/\{([^{}]*\|[^{}]*)\}/g, (_match, content: string) => {
     const choices = content.split('|');
     return choices[Math.floor(Math.random() * choices.length)];
   });
 };
 
 // Apply Anti-Ban invisible characters
+// Insere o caractere invisível só ENTRE palavras (após espaços). Dentro de uma
+// palavra ele corromperia a chave PIX, links e números que o cliente copia.
 export const applyAntiBan = (text: string): string => {
   if (!text) return text;
-  const invisibleChar = '\u200B'; // Zero Width Space
-  let result = '';
-  // Randomly insert invisible char (approx 10% chance per character)
-  for (let i = 0; i < text.length; i++) {
-    result += text[i];
-    if (Math.random() < 0.1) {
-      result += invisibleChar;
-    }
-  }
-  return result;
+  const invisibleChar = String.fromCharCode(0x200b); // Zero Width Space
+  return text.replace(/ /g, (space) => (Math.random() < 0.3 ? space + invisibleChar : space));
 };
 
 // Re-export para acesso unificado a partir de helpers
@@ -75,6 +70,14 @@ export const extractPhoneValidated = (text: string) => {
     invalidReason: v.reason,
     normalized: v.normalized || base.whatsapp
   };
+};
+
+// Número pronto para wa.me: com DDI 55 quando é um número BR válido.
+// Sem o 55, "21 99999 9999" vira wa.me/21999999999 e o WhatsApp não acha o contato.
+export const toWhatsappNumber = (digits: string): string => {
+  if (!digits) return '';
+  const v = validatePhone(digits);
+  return v.valid && v.normalized ? v.normalized : digits;
 };
 
 // Extract phone number from notes
@@ -139,4 +142,36 @@ export const generateCSV = (data: Array<{ name: string; date: Date; notes: strin
   });
 
   return csvContent;
+};
+
+// Dispara o download de um Blob. O revoke precisa ser adiado: revogar logo após
+// o click() cancela o download no Chrome/Edge antes de ele começar.
+export const downloadBlob = (blob: Blob, filename: string) => {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+};
+
+// localStorage tolerante a falhas: JSON corrompido ou cota cheia não derrubam o app
+export const loadJSON = <T,>(key: string, fallback: T): T => {
+  try {
+    const saved = localStorage.getItem(key);
+    return saved ? (JSON.parse(saved) as T) : fallback;
+  } catch {
+    return fallback;
+  }
+};
+
+export const saveItem = (key: string, value: string): boolean => {
+  try {
+    localStorage.setItem(key, value);
+    return true;
+  } catch {
+    return false;
+  }
 };

@@ -9,7 +9,7 @@ import {
 import { ParsedClient, AppConfig, ViewMode, ResultViewMode, ToastMessage, DateRange, ActionLog, StoredClient, Reminder } from './types';
 import { DEFAULT_CONFIG } from './constants';
 import { parseClientData, detectInputType, normalizeCsvIfNeeded } from './utils/parser';
-import { extractPhone, extractPhoneValidated, generateCSV, formatDateShort, toInputDate, formatCurrency, padZero, formatDate } from './utils/helpers';
+import { extractPhone, extractPhoneValidated, generateCSV, formatDateShort, toInputDate, formatDate, downloadBlob, toWhatsappNumber, loadJSON, saveItem } from './utils/helpers';
 import { getWeekdayContext, getUpcomingRange } from './utils/calendar';
 import ClientCard from './components/ClientCard';
 import ConfigModal from './components/ConfigModal';
@@ -40,9 +40,8 @@ function App() {
 
   // --- Configuration State (With Migration Logic) ---
   const [config, setConfig] = useState<AppConfig>(() => {
-    const saved = localStorage.getItem('cobrancaConfig');
-    if (saved) {
-        const parsed = JSON.parse(saved);
+    const parsed = loadJSON<any>('cobrancaConfig', null);
+    if (parsed && parsed.templates) {
         
         // MIGRATION: Convert old "prices" object to "plans" array if needed
         if (parsed.prices && (!parsed.plans || parsed.plans.length === 0)) {
@@ -109,31 +108,18 @@ function App() {
   const [inputData, setInputData] = useState(() => localStorage.getItem('lastInputData') || '');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   
-  const [customNotes, setCustomNotes] = useState<Record<string, string>>(() => {
-    const saved = localStorage.getItem('customNotes');
-    return saved ? JSON.parse(saved) : {};
-  });
+  const [customNotes, setCustomNotes] = useState<Record<string, string>>(() => loadJSON('customNotes', {}));
 
-  const [customMessages, setCustomMessages] = useState<Record<string, string>>(() => {
-    const saved = localStorage.getItem('customMessages');
-    return saved ? JSON.parse(saved) : {};
-  });
+  const [customMessages, setCustomMessages] = useState<Record<string, string>>(() => loadJSON('customMessages', {}));
 
-  const [phoneOverrides, setPhoneOverrides] = useState<Record<string, string>>(() => {
-    const saved = localStorage.getItem('phoneOverrides');
-    return saved ? JSON.parse(saved) : {};
-  });
+  const [phoneOverrides, setPhoneOverrides] = useState<Record<string, string>>(() => loadJSON('phoneOverrides', {}));
 
-  const [clientTags, setClientTags] = useState<Record<string, string[]>>(() => {
-    const saved = localStorage.getItem('clientTags');
-    return saved ? JSON.parse(saved) : {};
-  });
+  const [pixOverrides, setPixOverrides] = useState<Record<string, string>>(() => loadJSON('pixOverrides', {}));
+
+  const [clientTags, setClientTags] = useState<Record<string, string[]>>(() => loadJSON('clientTags', {}));
 
   // Mapping: MasterName -> Array of DependentNames
-  const [clientLinks, setClientLinks] = useState<Record<string, string[]>>(() => {
-      const saved = localStorage.getItem('clientLinks');
-      return saved ? JSON.parse(saved) : {};
-  });
+  const [clientLinks, setClientLinks] = useState<Record<string, string[]>>(() => loadJSON('clientLinks', {}));
 
   // --- View State ---
   const [viewMode, setViewMode] = useState<ViewMode>('input');
@@ -233,56 +219,60 @@ function App() {
   // --- Effects ---
   useEffect(() => {
     document.documentElement.classList.toggle('dark', isDarkMode);
-    localStorage.setItem('themeElite', isDarkMode ? 'dark' : 'light');
+    saveItem('themeElite', isDarkMode ? 'dark' : 'light');
   }, [isDarkMode]);
 
   useEffect(() => {
-    localStorage.setItem('cobrancaConfig', JSON.stringify(config));
+    saveItem('cobrancaConfig', JSON.stringify(config));
   }, [config]);
 
   useEffect(() => {
-    localStorage.setItem('lastInputData', inputData);
+    saveItem('lastInputData', inputData);
   }, [inputData]);
 
   useEffect(() => {
-    localStorage.setItem('customNotes', JSON.stringify(customNotes));
+    saveItem('customNotes', JSON.stringify(customNotes));
   }, [customNotes]);
 
   useEffect(() => {
-    localStorage.setItem('customMessages', JSON.stringify(customMessages));
+    saveItem('customMessages', JSON.stringify(customMessages));
   }, [customMessages]);
 
   useEffect(() => {
-    localStorage.setItem('phoneOverrides', JSON.stringify(phoneOverrides));
+    saveItem('phoneOverrides', JSON.stringify(phoneOverrides));
   }, [phoneOverrides]);
 
   useEffect(() => {
-    localStorage.setItem('clientTags', JSON.stringify(clientTags));
+    saveItem('pixOverrides', JSON.stringify(pixOverrides));
+  }, [pixOverrides]);
+
+  useEffect(() => {
+    saveItem('clientTags', JSON.stringify(clientTags));
   }, [clientTags]);
 
   useEffect(() => {
-    localStorage.setItem('clientLinks', JSON.stringify(clientLinks));
+    saveItem('clientLinks', JSON.stringify(clientLinks));
   }, [clientLinks]);
 
   useEffect(() => {
-    localStorage.setItem('unifiedStart', unifiedDates.start);
-    localStorage.setItem('unifiedEnd', unifiedDates.end);
+    saveItem('unifiedStart', unifiedDates.start);
+    saveItem('unifiedEnd', unifiedDates.end);
   }, [unifiedDates]);
 
   useEffect(() => {
-    localStorage.setItem('sentClientsHistory', JSON.stringify(sentClients));
+    saveItem('sentClientsHistory', JSON.stringify(sentClients));
   }, [sentClients]);
 
   useEffect(() => {
-    localStorage.setItem('actionHistory', JSON.stringify(actionHistory));
+    saveItem('actionHistory', JSON.stringify(actionHistory));
   }, [actionHistory]);
 
   useEffect(() => {
-    localStorage.setItem('clientDatabase', JSON.stringify(clientDatabase));
+    saveItem('clientDatabase', JSON.stringify(clientDatabase));
   }, [clientDatabase]);
 
   useEffect(() => {
-    localStorage.setItem('reminders', JSON.stringify(reminders));
+    saveItem('reminders', JSON.stringify(reminders));
   }, [reminders]);
 
   // Dispara lembretes pendentes ao carregar e agenda os futuros da sessão
@@ -297,7 +287,7 @@ function App() {
       } else if (delay < 24 * 60 * 60 * 1000) {
         setTimeout(() => {
           addToast(`⏰ Lembrete: ${r.clientName}`, 'warning');
-          if (Notification.permission === 'granted') {
+          if ('Notification' in window && Notification.permission === 'granted') {
             new Notification('TVBR.Cob', { body: `Hora de cobrar: ${r.clientName}`, icon: '/favicon.ico' });
           }
           setReminders(prev => prev.map(x => x.id === r.id ? { ...x, fired: true } : x));
@@ -309,11 +299,19 @@ function App() {
 
   // --- Helpers ---
   const addToast = (text: string, type: ToastMessage['type'] = 'info') => {
-    const id = Date.now();
+    const id = Date.now() + Math.random(); // dois toasts no mesmo ms não colidem
     setToasts(prev => [...prev, { id, text, type }]);
     setTimeout(() => {
       setToasts(prev => prev.filter(t => t.id !== id));
     }, 4000);
+  };
+
+  // Anexa ao final do campo; a linha em branco separa blocos (zera a seção IPTV/P2P)
+  const appendInput = (text: string) => {
+    setInputData(prev => {
+      const cleanPrev = (prev || '').trim();
+      return cleanPrev ? `${cleanPrev}\n\n${text}` : text;
+    });
   };
 
   const handlePasteInput = async () => {
@@ -324,12 +322,7 @@ function App() {
           return;
       }
       // Normaliza CSV automaticamente caso o AdminX exporte nesse formato
-      const text = normalizeCsvIfNeeded(raw);
-      setInputData(prev => {
-          const cleanPrev = prev || '';
-          if (!cleanPrev.trim()) return text;
-          return cleanPrev.trim() + '\n' + text;
-      });
+      appendInput(normalizeCsvIfNeeded(raw));
       addToast('Dados adicionados ao final da lista!', 'success');
     } catch (err) {
       if (textareaRef.current) {
@@ -346,12 +339,7 @@ function App() {
     if (!file) return;
     try {
       const raw = await file.text();
-      const text = normalizeCsvIfNeeded(raw);
-      setInputData(prev => {
-        const cleanPrev = prev || '';
-        if (!cleanPrev.trim()) return text;
-        return cleanPrev.trim() + '\n' + text;
-      });
+      appendInput(normalizeCsvIfNeeded(raw));
       addToast(`Arquivo "${file.name}" carregado.`, 'success');
     } catch {
       addToast('Falha ao ler o arquivo.', 'error');
@@ -379,8 +367,10 @@ function App() {
       return;
     }
 
-    const isLikelyP2P = detectInputType(inputData);
-    const { parsedEntries } = parseClientData(inputData, isLikelyP2P);
+    // Ctrl+V direto no campo não passa pelo botão Colar: normaliza aqui também
+    const normalizedInput = normalizeCsvIfNeeded(inputData);
+    const isLikelyP2P = detectInputType(normalizedInput);
+    const { parsedEntries } = parseClientData(normalizedInput, isLikelyP2P);
     
     // 1. First Pass: Apply overrides and basic formatting
     const preparedClients = parsedEntries.filter(entry => {
@@ -400,6 +390,7 @@ function App() {
         rawNotes: rawNotes,
         customNotes: customNotes[entry.name] || '',
         customMessage: customMessages[entry.name] || '',
+        customPix: pixOverrides[entry.name] || '',
         tags: clientTags[entry.name] || [],
         linked: [] as ParsedClient[]
       };
@@ -438,13 +429,14 @@ function App() {
     setResults(groupedClients);
     saveToDatabase(preparedClients);
     setIsExpiredMode(isVencidoFilter);
-    const typeLabel = isLikelyP2P ? 'P2P' : 'IPTV';
+    const types = new Set(preparedClients.map(c => c.type));
+    const typeLabel = types.size > 1 ? 'IPTV + P2P' : types.has('p2p') ? 'P2P' : 'IPTV';
     const modeLabel = isVencidoFilter ? 'Vencidos' : typeLabel;
     setResultTitle(`${modeLabel} (${formatDateShort(start)} - ${formatDateShort(end)})`);
     setViewMode('results');
     setResultViewMode('grid'); // Reset to grid view
     setSearchQuery('');
-  }, [inputData, phoneOverrides, customNotes, customMessages, clientTags, clientLinks]);
+  }, [inputData, phoneOverrides, pixOverrides, customNotes, customMessages, clientTags, clientLinks]);
 
   const handleFilterUpcoming = () => {
     const range = getUpcomingRange();
@@ -499,6 +491,14 @@ function App() {
         setPhoneOverrides(prev => ({ ...prev, [updated.name]: original }));
     }
 
+    // PIX próprio do cliente (vazio = volta a usar o das Configurações)
+    const pix = updated.customPix?.trim();
+    if (pix) {
+      setPixOverrides(prev => ({ ...prev, [updated.name]: pix }));
+    } else {
+      setPixOverrides(prev => { const copy = { ...prev }; delete copy[updated.name]; return copy; });
+    }
+
     // Tags
     if (updated.tags && updated.tags.length > 0) {
         setClientTags(prev => ({ ...prev, [updated.name]: updated.tags! }));
@@ -520,7 +520,7 @@ function App() {
         .replace(/{data_vencimento}/g, formatDate(date))
         .replace(/{valor}/g, `R$ ${value}`);
 
-    const { whatsapp } = extractPhone(receiptClient.rawNotes);
+    const whatsapp = toWhatsappNumber(extractPhone(receiptClient.rawNotes).whatsapp);
 
     if (whatsapp) {
         const url = `https://wa.me/${whatsapp}?text=${encodeURIComponent(receiptMsg)}`;
@@ -547,6 +547,28 @@ function App() {
       addToast('Vínculos salvos!', 'success');
   };
 
+  // Ao trocar a chave PIX, atualiza também onde a chave antiga ficou escrita
+  // literalmente (modelos e mensagens personalizadas salvas antes de usar {pix}).
+  const handleSaveConfig = (newConf: AppConfig) => {
+    const oldKey = config.pixKey?.trim();
+    const newKey = newConf.pixKey?.trim();
+    const swap = (text: string) => (oldKey && newKey && oldKey !== newKey ? text.split(oldKey).join(newKey) : text);
+    const t = newConf.templates;
+    setConfig({
+      ...newConf,
+      templates: {
+        ...t,
+        normal: swap(t.normal),
+        expired: swap(t.expired),
+        receipt: swap(t.receipt),
+        additional: (t.additional || []).map(a => ({ ...a, content: swap(a.content) })),
+      },
+    });
+    setCustomMessages(prev => Object.fromEntries(Object.entries(prev).map(([k, v]) => [k, swap(v as string)])));
+    setIsConfigOpen(false);
+    addToast('Salvo', 'success');
+  };
+
   const handleExport = () => {
     if (results.length === 0) return;
     const dataToExport = getFilteredResults().map(r => ({
@@ -558,13 +580,7 @@ function App() {
     }));
     const csv = generateCSV(dataToExport, config.defaultTime || '20:00');
     const blob = new Blob([String.fromCharCode(0xFEFF), csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', `clientes_export_${Date.now()}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    downloadBlob(blob, `clientes_export_${Date.now()}.csv`);
     addToast('Arquivo exportado.', 'success');
   };
 
@@ -589,19 +605,12 @@ function App() {
         });
     }
 
-    // AUTO-ADVANCE LOGIC (QUEUE MODE)
-    if (action === 'whatsapp') {
+    // AUTO-ADVANCE LOGIC (QUEUE MODE) — lê o estado atual via ref, sem updater aninhado
+    if (action === 'whatsapp' && isQueueModeRef.current) {
         setTimeout(() => {
-            setIsQueueMode(currentIsQueue => {
-                if (currentIsQueue) {
-                     setFocusIndex(prevIndex => {
-                         const total = getFilteredResults().length;
-                         if (prevIndex < total - 1) return prevIndex + 1;
-                         return prevIndex;
-                     });
-                }
-                return currentIsQueue;
-            });
+            if (!isQueueModeRef.current) return;
+            const total = filteredCountRef.current;
+            setFocusIndex(prevIndex => (prevIndex < total - 1 ? prevIndex + 1 : prevIndex));
         }, 1000);
     }
   }, [results]);
@@ -626,6 +635,15 @@ function App() {
         return matchesName || matchesNotes || matchesCustom || matchesTags || matchesLinked;
     });
   }, [results, searchQuery, config.tags]);
+
+  const filteredResults = useMemo(() => getFilteredResults(), [getFilteredResults]);
+  const isQueueModeRef = useRef(isQueueMode);
+  isQueueModeRef.current = isQueueMode;
+  const filteredCountRef = useRef(filteredResults.length);
+  filteredCountRef.current = filteredResults.length;
+  // Índice sempre dentro da lista (ela pode encolher durante o modo Foco)
+  const safeFocusIndex = Math.min(focusIndex, Math.max(filteredResults.length - 1, 0));
+  const focusClient = filteredResults[safeFocusIndex];
 
   const dashboardStats = useMemo(() => {
     // When calculating stats, we should probably consider linked clients too if we want "Total Accounts"
@@ -653,7 +671,7 @@ function App() {
 
     const potentialRevenue = totalAccounts * (config.plans?.[0]?.price || 35);
     return { total: totalCards, expired, today: expiringToday, potentialRevenue };
-  }, [results, searchQuery, config.plans]);
+  }, [getFilteredResults, config.plans]);
 
   // --- Focus Mode Logic ---
   const startFocusMode = (enableQueue = false) => {
@@ -687,9 +705,8 @@ function App() {
   };
 
   const handleFocusNext = () => {
-    const filtered = getFilteredResults();
-    if (focusIndex < filtered.length - 1) {
-      setFocusIndex(prev => prev + 1);
+    if (safeFocusIndex < filteredResults.length - 1) {
+      setFocusIndex(safeFocusIndex + 1);
     } else if (isQueueMode) {
       if (invalidClients.length > 0) setShowInvalidReport(true);
       setIsQueueMode(false);
@@ -698,7 +715,7 @@ function App() {
   };
 
   const handleFocusPrev = () => {
-    if (focusIndex > 0) setFocusIndex(prev => prev - 1);
+    if (safeFocusIndex > 0) setFocusIndex(safeFocusIndex - 1);
   };
 
   // --- Handlers: Banco de Clientes ---
@@ -726,11 +743,12 @@ function App() {
   };
 
   const handleLoadFromDatabase = (clients: StoredClient[]) => {
-    const lines = clients.map(c => c.originalLine || c.name).join('\n');
-    setInputData(prev => {
-      const clean = prev.trim();
-      return clean ? clean + '\n' + lines : lines;
-    });
+    // Cabeçalho de seção por tipo, senão o parser chuta o tipo pela quantidade de datas
+    const block = (type: 'iptv' | 'p2p') => {
+      const lines = clients.filter(c => c.type === type).map(c => c.originalLine || c.name);
+      return lines.length ? [type === 'p2p' ? 'Clientes P2P' : 'Clientes IPTV', ...lines].join('\n') : '';
+    };
+    appendInput([block('iptv'), block('p2p')].filter(Boolean).join('\n\n'));
     addToast('Clientes carregados no painel', 'success');
   };
 
@@ -738,11 +756,13 @@ function App() {
     setPhoneOverrides(prev => ({ ...prev, [clientName]: phone }));
     // Update rawNotes immediately in current results
     const { cleanText } = extractPhone(results.find(r => r.name === clientName)?.rawNotes || '');
-    setResults(prev => prev.map(r =>
+    const apply = (list: ParsedClient[]) => list.map(r =>
       r.name === clientName
         ? { ...r, rawNotes: phone ? `${phone} ${cleanText}`.trim() : r.rawNotes }
         : r
-    ));
+    );
+    setResults(apply);
+    setFlatResults(apply);
   };
 
   const handleRemoveFromDatabase = (id: string) => {
@@ -771,7 +791,7 @@ function App() {
     if (delay > 0 && delay < 24 * 60 * 60 * 1000) {
       setTimeout(() => {
         addToast(`⏰ Lembrete: ${client.name}`, 'warning');
-        if (Notification.permission === 'granted') {
+        if ('Notification' in window && Notification.permission === 'granted') {
           new Notification('TVBR.Cob', { body: `Hora de cobrar: ${client.name}`, icon: '/favicon.ico' });
         }
         setReminders(prev => prev.map(r => r.id === reminder.id ? { ...r, fired: true } : r));
@@ -1033,7 +1053,7 @@ function App() {
 
               {/* Cards */}
               <div className={resultViewMode === 'grid' ? "grid grid-cols-1 gap-3" : "flex flex-col gap-2"}>
-                {getFilteredResults().length > 0 ? getFilteredResults().map((client) => (
+                {filteredResults.length > 0 ? filteredResults.map((client) => (
                   <ClientCard key={client.id} client={client} config={config} isExpiredMode={isExpiredMode} viewMode={resultViewMode} searchQuery={searchQuery} isSent={!!sentClients[client.id]} hasReminder={reminders.some(r => r.clientName.toLowerCase() === client.name.toLowerCase() && !r.fired)} phoneOverride={phoneOverrides[client.name] || ''} onEdit={setEditingClient} onCopy={copyToClipboard} onMarkAsSent={handleMarkAsSent} onOpenReceipt={setReceiptClient} onLinkClient={setLinkingClient} onAddReminder={setReminderClient} />
                 )) : (
                   <div className="text-center py-16 text-gray-500 dark:text-slate-600 bg-white dark:bg-slate-800/30 rounded-xl border border-dashed border-gray-300 dark:border-slate-700">
@@ -1047,7 +1067,7 @@ function App() {
       </div>
 
       {/* ── MODO FOCO ── */}
-      {resultViewMode === 'focus' && getFilteredResults().length > 0 && (
+      {resultViewMode === 'focus' && focusClient && (
         <div className="fixed inset-0 z-50 bg-gray-50 dark:bg-slate-950 flex flex-col">
           <div className="h-14 flex items-center justify-between px-6 bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800">
             <div className="flex items-center gap-4">
@@ -1059,22 +1079,22 @@ function App() {
                   <span className="text-[10px] text-gray-500 dark:text-slate-500 uppercase font-bold tracking-wider">Modo Foco</span>
                   {isQueueMode && <span className="bg-amber-500/20 text-amber-700 dark:text-amber-300 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 animate-pulse"><Rocket size={9} /> FILA</span>}
                 </div>
-                <span className="text-sm font-bold text-gray-900 dark:text-white">{focusIndex + 1} / {getFilteredResults().length}</span>
+                <span className="text-sm font-bold text-gray-900 dark:text-white">{safeFocusIndex + 1} / {filteredResults.length}</span>
               </div>
             </div>
             <div className="w-48 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full overflow-hidden">
-              <div className="h-full bg-emerald-600 transition-all duration-300" style={{ width: `${((focusIndex + 1) / getFilteredResults().length) * 100}%` }} />
+              <div className="h-full bg-emerald-600 transition-all duration-300" style={{ width: `${((safeFocusIndex + 1) / filteredResults.length) * 100}%` }} />
             </div>
           </div>
           <div className="flex-1 flex items-center justify-center p-4 sm:p-10 overflow-hidden">
             <div className="w-full max-w-2xl h-full flex flex-col justify-center">
-              <ClientCard client={getFilteredResults()[focusIndex]} config={config} isExpiredMode={isExpiredMode} viewMode="focus" searchQuery={searchQuery} isSent={!!sentClients[getFilteredResults()[focusIndex].id]} hasReminder={reminders.some(r => r.clientName.toLowerCase() === getFilteredResults()[focusIndex].name.toLowerCase() && !r.fired)} phoneOverride={phoneOverrides[getFilteredResults()[focusIndex].name] || ''} onEdit={setEditingClient} onCopy={copyToClipboard} onMarkAsSent={handleMarkAsSent} onOpenReceipt={setReceiptClient} onLinkClient={setLinkingClient} onAddReminder={setReminderClient} />
+              <ClientCard client={focusClient} config={config} isExpiredMode={isExpiredMode} viewMode="focus" searchQuery={searchQuery} isSent={!!sentClients[focusClient.id]} hasReminder={reminders.some(r => r.clientName.toLowerCase() === focusClient.name.toLowerCase() && !r.fired)} phoneOverride={phoneOverrides[focusClient.name] || ''} onEdit={setEditingClient} onCopy={copyToClipboard} onMarkAsSent={handleMarkAsSent} onOpenReceipt={setReceiptClient} onLinkClient={setLinkingClient} onAddReminder={setReminderClient} />
             </div>
           </div>
           <div className="h-20 bg-white dark:bg-slate-900 border-t border-gray-200 dark:border-slate-800 flex items-center justify-center gap-6">
-            <button onClick={handleFocusPrev} disabled={focusIndex === 0} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-gray-500 dark:text-slate-400 text-xs disabled:opacity-20 disabled:cursor-not-allowed transition-all"><ChevronLeft size={13} /></button>
+            <button onClick={handleFocusPrev} disabled={safeFocusIndex === 0} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-gray-500 dark:text-slate-400 text-xs disabled:opacity-20 disabled:cursor-not-allowed transition-all"><ChevronLeft size={13} /></button>
             <span className="text-xs text-gray-400 dark:text-slate-600 font-medium">Navegar</span>
-            <button onClick={handleFocusNext} disabled={focusIndex === getFilteredResults().length - 1} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs disabled:opacity-20 disabled:cursor-not-allowed transition-all"><ChevronRight size={13} /></button>
+            <button onClick={handleFocusNext} disabled={!isQueueMode && safeFocusIndex === filteredResults.length - 1} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs disabled:opacity-20 disabled:cursor-not-allowed transition-all"><ChevronRight size={13} /></button>
           </div>
         </div>
       )}
@@ -1100,7 +1120,7 @@ function App() {
       />
 
       {/* ── MODAIS ── */}
-      <ConfigModal isOpen={isConfigOpen} onClose={() => setIsConfigOpen(false)} config={config} onSave={(newConf) => { setConfig(newConf); setIsConfigOpen(false); addToast('Salvo', 'success'); }} />
+      <ConfigModal isOpen={isConfigOpen} onClose={() => setIsConfigOpen(false)} config={config} onSave={handleSaveConfig} />
       <EditClientModal isOpen={!!editingClient} onClose={() => setEditingClient(null)} client={editingClient} config={config} onSave={handleEditSave} />
       <ReceiptModal isOpen={!!receiptClient} onClose={() => setReceiptClient(null)} client={receiptClient} config={config} onConfirm={handleSendReceipt} />
       <LinkClientsModal isOpen={!!linkingClient} onClose={() => setLinkingClient(null)} masterClient={linkingClient} allClients={flatResults} onSave={handleSaveLinks} />

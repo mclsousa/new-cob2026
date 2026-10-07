@@ -1,8 +1,8 @@
 
 import React, { useMemo, useState, useEffect } from 'react';
 import { ParsedClient, AppConfig, ResultViewMode } from '../types';
-import { extractPhone, padZero, formatDate, processSpinSyntax, applyAntiBan, extractCredentials } from '../utils/helpers';
-import { Copy, Phone, Edit, MessageSquare, User, CheckCircle, ChevronDown, ChevronUp, PenTool, List, FileText, Link as LinkIcon, Lock, Key, Zap, Bell } from 'lucide-react';
+import { extractPhone, formatDate, processSpinSyntax, applyAntiBan, extractCredentials, toWhatsappNumber } from '../utils/helpers';
+import { Copy, Phone, Edit, User, CheckCircle, ChevronDown, ChevronUp, PenTool, List, FileText, Link as LinkIcon, Lock, Key, Bell, ClockAlert, AlertCircle, AlarmClock, CalendarDays, CircleCheck } from 'lucide-react';
 
 interface ClientCardProps {
   client: ParsedClient;
@@ -35,21 +35,10 @@ const WhatsappIcon = ({ size = 16, className }: { size?: number, className?: str
 );
 
 
-const getInitials = (name: string) => {
-  const parts = name.trim().split(/\s+/);
-  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
-  return parts[0].slice(0, 2).toUpperCase();
-};
-
-const getAvatarColor = (name: string) => {
-  const colors = [
-    'from-emerald-500 to-teal-600',
-    'from-violet-500 to-purple-600',
-    'from-blue-500 to-cyan-600',
-    'from-orange-500 to-amber-600',
-    'from-pink-500 to-rose-600',
-  ];
-  return colors[name.charCodeAt(0) % colors.length];
+// Ícone de status pelo nível (1 vencido, 5 hoje, 2 amanhã, 3 em 2 dias, 4 ativo)
+const StatusIcon = ({ level, color, size }: { level: number; color: string; size: number }) => {
+  const Icon = level === 1 ? ClockAlert : level === 5 ? AlertCircle : level === 2 ? AlarmClock : level === 3 ? CalendarDays : CircleCheck;
+  return <Icon size={size} style={{ color }} />;
 };
 
 const ClientCard: React.FC<ClientCardProps> = ({
@@ -63,7 +52,7 @@ const ClientCard: React.FC<ClientCardProps> = ({
 
   const { cleanText, whatsapp: extractedWhatsapp, original: originalPhone } = useMemo(() => extractPhone(client.rawNotes), [client.rawNotes]);
   const { whatsapp: overrideWhatsapp, original: overrideOriginal } = useMemo(() => phoneOverride ? extractPhone(phoneOverride) : { whatsapp: null, original: null }, [phoneOverride]);
-  const whatsapp = overrideWhatsapp || extractedWhatsapp;
+  const whatsapp = toWhatsappNumber(overrideWhatsapp || extractedWhatsapp || '');
   const displayPhone = overrideOriginal || originalPhone;
   const hasLinkedClients = client.linked && client.linked.length > 0;
   const credentials = useMemo(() => extractCredentials(cleanText), [cleanText]);
@@ -185,7 +174,7 @@ const ClientCard: React.FC<ClientCardProps> = ({
         .replace(/{saudacao}/g, saudacao)
         .replace(/{nome}/g, clientNameDisplay)
         .replace(/{vencimento}/g, vencimentoFinal)
-        .replace(/{pix}/g, config.pixKey)
+        .replace(/{pix}/g, client.customPix?.trim() || config.pixKey)
         .replace(/{tabela_precos}/g, priceTableString)
         .replace(/{titulo_tabela}/g, tableTitle)
         .replace(/{login}/g, credentials.login || '???')
@@ -319,10 +308,7 @@ const ClientCard: React.FC<ClientCardProps> = ({
         >
             {/* Sinal de status */}
             <div className="flex-shrink-0 flex flex-col items-center justify-center w-8 gap-0.5">
-                <i
-                  className={`ti ${activeBars === 1 ? 'ti-clock-x' : activeBars === 5 ? 'ti-alert-circle' : activeBars === 2 ? 'ti-alarm' : activeBars === 3 ? 'ti-calendar-event' : 'ti-circle-check'}`}
-                  style={{ color: barColor, fontSize: '20px', lineHeight: 1 }}
-                />
+                <StatusIcon level={activeBars} color={barColor} size={20} />
                 <span className="text-[8px] font-bold leading-none" style={{ color: barColor }}>
                   {activeBars === 1 ? 'vencido' : activeBars === 5 ? 'hoje' : activeBars === 2 ? 'amanhã' : activeBars === 3 ? '2 dias' : 'ativo'}
                 </span>
@@ -421,10 +407,7 @@ const ClientCard: React.FC<ClientCardProps> = ({
                 onClick={() => setIsCollapsed(true)}
               >
                 <div className="flex items-center gap-2 min-w-0">
-                  <i
-                    className={`ti ${activeBars === 1 ? 'ti-clock-x' : activeBars === 5 ? 'ti-alert-circle' : activeBars === 2 ? 'ti-alarm' : activeBars === 3 ? 'ti-calendar-event' : 'ti-circle-check'}`}
-                    style={{ color: barColor, fontSize: '16px', lineHeight: 1 }}
-                  />
+                  <StatusIcon level={activeBars} color={barColor} size={16} />
                   <span className="text-[10px] text-gray-400 dark:text-slate-500">{statusText.split('(')[0].trim()}</span>
                 </div>
                 <ChevronUp size={14} className="text-gray-400 dark:text-slate-500 flex-shrink-0" />
@@ -599,7 +582,8 @@ const ClientCard: React.FC<ClientCardProps> = ({
   );
 };
 
-function formatPhone(num: string) {
+function formatPhone(raw: string) {
+    const num = raw.length === 13 && raw.startsWith('55') ? raw.slice(2) : raw;
     if (num.length === 11) {
         return `(${num.substring(0,2)}) ${num.substring(2,7)}-${num.substring(7)}`;
     }

@@ -7,6 +7,7 @@ export interface ParsedClient {
   originalLine: string;
   customNotes?: string;
   customMessage?: string; // Nova funcionalidade: Mensagem personalizada
+  customPix?: string; // Chave PIX própria do cliente (sobrepõe a das Configurações)
   tags?: string[]; // Array of Tag IDs
   linked?: ParsedClient[]; // New: Linked/Dependent clients
   type: 'iptv' | 'p2p';

@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { AppConfig, MessageTemplate, ClientTag, PricingPlan, QuickLink, PlanGroup } from '../types';
+import { downloadBlob } from '../utils/helpers';
 import { Save, X, Download, Upload, Clock, AlertTriangle, Plus, Trash2, FileText, Tag, CreditCard, Link as LinkIcon, Shield, HelpCircle, Check } from 'lucide-react';
 
 interface ConfigModalProps {
@@ -249,6 +250,7 @@ const ConfigModal: React.FC<ConfigModalProps> = ({ isOpen, onClose, config, onSa
     'customNotes',
     'customMessages',
     'phoneOverrides',
+    'pixOverrides',
     'clientTags',
     'clientLinks',
     'clientDatabase',
@@ -270,14 +272,7 @@ const ConfigModal: React.FC<ConfigModalProps> = ({ isOpen, onClose, config, onSa
     backupData['cobrancaConfig'] = JSON.stringify(localConfig);
 
     const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `backup_tvbrcob_${new Date().toISOString().split('T')[0]}.json`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    downloadBlob(blob, `backup_tvbrcob_${new Date().toISOString().split('T')[0]}.json`);
   };
 
   const handleRestore = (e: React.ChangeEvent<HTMLInputElement>) => {

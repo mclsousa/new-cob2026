@@ -6,13 +6,13 @@
   "scripts": {
     "dev": "vite",
     "build": "node node_modules/vite/bin/vite.js build",
-    "preview": "node node_modules/vite/bin/vite.js preview"
+    "preview": "node node_modules/vite/bin/vite.js preview",
+    "check": "esbuild scripts/selfcheck.ts --bundle --platform=node --log-level=error --outfile=node_modules/.cache/selfcheck.cjs && node node_modules/.cache/selfcheck.cjs"
   },
   "dependencies": {
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0",
     "lucide-react": "^0.555.0",
-    "uuid": "^13.0.0"
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
