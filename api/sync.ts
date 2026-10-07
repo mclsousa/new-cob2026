@@ -3,7 +3,8 @@
 // PUT  -> body { data, baseUpdatedAt } ; 409 com o estado atual se a nuvem mudou depois de baseUpdatedAt
 // Auth: "Authorization: Bearer <SYNC_PASSWORD>". 10 senhas erradas por IP bloqueiam por 15 min.
 import { createHash, timingSafeEqual } from 'node:crypto';
-import { isSyncKey, type SyncData } from '../utils/syncKeys';
+// ".js" obrigatório: a função roda como ESM no Node, que não resolve import sem extensão
+import { isSyncKey, type SyncData } from '../utils/syncKeys.js';
 
 const STATE_KEY = 'tvbrcob:sync:state';
 const MAX_BODY_BYTES = 4 * 1024 * 1024;
