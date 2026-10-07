@@ -352,8 +352,25 @@ function App() {
     const file = e.target.files?.[0];
     if (!file) return;
     try {
-      const raw = await file.text();
-      appendInput(normalizeCsvIfNeeded(raw));
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      // .xlsx é um ZIP (começa com "PK"): não é texto
+      if (bytes[0] === 0x50 && bytes[1] === 0x4b) {
+        addToast('Planilha do Excel (.xlsx) não é suportada. Exporte/salve como CSV.', 'error');
+        return;
+      }
+      let raw = new TextDecoder('utf-8').decode(bytes);
+      // CSV salvo pelo Excel no Windows vem em Latin-1: UTF-8 inválido vira U+FFFD
+      if (raw.includes(String.fromCharCode(0xfffd))) raw = new TextDecoder('windows-1252').decode(bytes);
+      if (raw.includes('\u0000')) {
+        addToast('Arquivo não parece ser texto/CSV.', 'error');
+        return;
+      }
+      const text = normalizeCsvIfNeeded(raw);
+      if (!text.trim()) {
+        addToast(`"${file.name}" está vazio.`, 'warning');
+        return;
+      }
+      appendInput(text);
       addToast(`Arquivo "${file.name}" carregado.`, 'success');
     } catch {
       addToast('Falha ao ler o arquivo.', 'error');
@@ -937,7 +954,9 @@ function App() {
                 className="w-full h-36 p-3 rounded-xl border border-gray-300 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-800 dark:text-slate-200 focus:ring-2 focus:ring-emerald-500 outline-none resize-none font-mono text-xs placeholder-gray-400 dark:placeholder-slate-600 transition-all leading-relaxed"
               />
               <div className="flex gap-2">
-                <input type="file" accept=".csv,.txt,.tsv" ref={fileInputRef} onChange={handleFileUpload} className="hidden" />
+                {/* sem "accept": no Android o filtro por extensão vira tipo MIME e deixa CSVs
+                    de Downloads/WhatsApp/Drive cinza (não selecionáveis). O conteúdo é validado ao ler. */}
+                <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" />
                 <button onClick={() => fileInputRef.current?.click()} className="flex-1 text-xs bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-gray-500 dark:text-slate-400 px-3 py-2.5 rounded-xl transition-colors flex items-center justify-center gap-1.5">
                   <Upload size={13} /> Arquivo
                 </button>
