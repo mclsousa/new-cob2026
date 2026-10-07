@@ -2,6 +2,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { AppConfig, MessageTemplate, ClientTag, PricingPlan, QuickLink, PlanGroup } from '../types';
 import { downloadBlob } from '../utils/helpers';
+import { SYNC_KEYS } from '../utils/syncKeys';
+import { markDirty } from '../utils/sync';
+import SyncSection from './SyncSection';
 import { Save, X, Download, Upload, Clock, AlertTriangle, Plus, Trash2, FileText, Tag, CreditCard, Link as LinkIcon, Shield, HelpCircle, Check } from 'lucide-react';
 
 interface ConfigModalProps {
@@ -245,23 +248,7 @@ const ConfigModal: React.FC<ConfigModalProps> = ({ isOpen, onClose, config, onSa
   };
 
   // --- Backup & Restore Logic ---
-  const BACKUP_KEYS = [
-    'cobrancaConfig',
-    'customNotes',
-    'customMessages',
-    'phoneOverrides',
-    'pixOverrides',
-    'clientTags',
-    'clientLinks',
-    'clientDatabase',
-    'reminders',
-    'sentClientsHistory',
-    'actionHistory',
-    'lastInputData',
-    'themeElite',
-    'unifiedStart',
-    'unifiedEnd',
-  ] as const;
+  const BACKUP_KEYS = SYNC_KEYS;
 
   const handleBackup = () => {
     const backupData: Record<string, string | null> = { _version: '2', timestamp: new Date().toISOString() };
@@ -304,6 +291,7 @@ const ConfigModal: React.FC<ConfigModalProps> = ({ isOpen, onClose, config, onSa
                 }
             }
 
+            markDirty(); // envia o backup restaurado para a nuvem (se a sincronização estiver ligada)
             alert('Backup restaurado! A página será recarregada para aplicar tudo.');
             window.location.reload();
         } catch (err) {
@@ -370,6 +358,27 @@ const ConfigModal: React.FC<ConfigModalProps> = ({ isOpen, onClose, config, onSa
                         className="w-full p-3 rounded-xl bg-gray-100 dark:bg-slate-800 focus:ring-2 focus:ring-primary focus:outline-none transition-all"
                         placeholder="Seu e-mail, CPF ou telefone"
                         />
+                        <div className="grid grid-cols-2 gap-2 mt-2">
+                            <input
+                            type="text"
+                            value={localConfig.pixName || ''}
+                            onChange={(e) => handleChange('pixName', e.target.value)}
+                            maxLength={25}
+                            className="w-full p-3 rounded-xl bg-gray-100 dark:bg-slate-800 focus:ring-2 focus:ring-primary focus:outline-none transition-all text-sm"
+                            placeholder="Nome do recebedor"
+                            />
+                            <input
+                            type="text"
+                            value={localConfig.pixCity || ''}
+                            onChange={(e) => handleChange('pixCity', e.target.value)}
+                            maxLength={15}
+                            className="w-full p-3 rounded-xl bg-gray-100 dark:bg-slate-800 focus:ring-2 focus:ring-primary focus:outline-none transition-all text-sm"
+                            placeholder="Cidade"
+                            />
+                        </div>
+                        <p className="text-[10px] text-gray-500 mt-1">
+                            Nome e cidade entram no PIX copia e cola (<code>{`{pix_copia_cola}`}</code>). Telefone como chave: use <code>+55</code> na frente.
+                        </p>
                     </section>
 
                     <section>
@@ -385,6 +394,8 @@ const ConfigModal: React.FC<ConfigModalProps> = ({ isOpen, onClose, config, onSa
                         <p className="text-[10px] text-gray-500 mt-1">Horário padrão exibido nos cartões e mensagens.</p>
                     </section>
                 </div>
+
+                <SyncSection />
 
                  {/* New: Anti-Ban Mode Toggle */}
                 <section className="bg-blue-50 dark:bg-blue-900/10 p-4 rounded-xl border border-blue-100 dark:border-blue-800/50">
@@ -446,7 +457,7 @@ const ConfigModal: React.FC<ConfigModalProps> = ({ isOpen, onClose, config, onSa
                     <section>
                         <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-3">Template Padrão (Normal)</h3>
                         <div className="text-[10px] text-gray-500 mb-2 leading-relaxed">
-                            Variáveis: <code>{`{tabela_precos}`}</code>, <code>{`{saudacao}`}</code> (Bom dia/tarde...), <code>{`{titulo_tabela}`}</code> (Ex: {localConfig.plansTitle || 'TABELA DE PLANOS'} (2 Telas)).
+                            Variáveis: <code>{`{tabela_precos}`}</code>, <code>{`{saudacao}`}</code> (Bom dia/tarde...), <code>{`{titulo_tabela}`}</code> (Ex: {localConfig.plansTitle || 'TABELA DE PLANOS'} (2 Telas)), <code>{`{pix}`}</code>, <code>{`{pix_copia_cola}`}</code> (código PIX com o valor do 1º plano; deixe numa linha só).
                         </div>
                         <textarea 
                             value={localConfig.templates.normal}
@@ -458,7 +469,7 @@ const ConfigModal: React.FC<ConfigModalProps> = ({ isOpen, onClose, config, onSa
                     <section>
                         <h3 className="text-sm font-semibold text-red-500 uppercase tracking-wider mb-3">Template Padrão (Vencido)</h3>
                          <div className="text-[10px] text-gray-500 mb-2 leading-relaxed">
-                            Variáveis: <code>{`{tabela_precos}`}</code>, <code>{`{saudacao}`}</code> (Bom dia/tarde...), <code>{`{titulo_tabela}`}</code> (Ex: {localConfig.plansTitle || 'TABELA DE PLANOS'} (2 Telas)).
+                            Variáveis: <code>{`{tabela_precos}`}</code>, <code>{`{saudacao}`}</code> (Bom dia/tarde...), <code>{`{titulo_tabela}`}</code> (Ex: {localConfig.plansTitle || 'TABELA DE PLANOS'} (2 Telas)), <code>{`{pix}`}</code>, <code>{`{pix_copia_cola}`}</code> (código PIX com o valor do 1º plano; deixe numa linha só).
                         </div>
                         <textarea 
                             value={localConfig.templates.expired}

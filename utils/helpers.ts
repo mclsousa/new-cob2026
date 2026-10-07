@@ -50,8 +50,15 @@ export const processSpinSyntax = (text: string): string => {
 export const applyAntiBan = (text: string): string => {
   if (!text) return text;
   const invisibleChar = String.fromCharCode(0x200b); // Zero Width Space
-  return text.replace(/ /g, (space) => (Math.random() < 0.3 ? space + invisibleChar : space));
+  return text
+    .split('\n')
+    // linha com PIX copia e cola fica intacta: qualquer byte a mais invalida o CRC
+    .map(line => (/br\.gov\.bcb\.pix/i.test(line) ? line : line.replace(/ /g, (space) => (Math.random() < 0.3 ? space + invisibleChar : space))))
+    .join('\n');
 };
+
+import { isSyncKey } from './syncKeys';
+import { markDirty } from './sync';
 
 // Re-export para acesso unificado a partir de helpers
 export { validatePhone } from './phone';
@@ -169,7 +176,11 @@ export const loadJSON = <T,>(key: string, fallback: T): T => {
 
 export const saveItem = (key: string, value: string): boolean => {
   try {
+    // Os efeitos do React regravam tudo ao abrir o app: só conta como alteração
+    // (e dispara a sincronização) quando o valor muda de fato.
+    if (localStorage.getItem(key) === value) return true;
     localStorage.setItem(key, value);
+    if (isSyncKey(key)) markDirty();
     return true;
   } catch {
     return false;

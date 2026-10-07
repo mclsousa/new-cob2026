@@ -4,8 +4,9 @@ import {
   Sun, Moon, Filter, Trash2, Search, ArrowLeft, Download, Settings, Users,
   CalendarX, AlertTriangle, Info, CalendarCheck, LayoutGrid, LayoutList,
   History, Play, X, ChevronLeft, ChevronRight, CheckCircle, Clock, Link as LinkIcon, Copy, MessageSquare, ExternalLink,
-  Clipboard, Rocket, Upload, AlertOctagon, Menu, Database, Bell
+  Clipboard, Rocket, Upload, AlertOctagon, Menu, Database, Bell, Cloud, CloudOff, RefreshCw
 } from 'lucide-react';
+import { onSyncStatus, syncNow, consumeJustPulled, type SyncStatus } from './utils/sync';
 import { ParsedClient, AppConfig, ViewMode, ResultViewMode, ToastMessage, DateRange, ActionLog, StoredClient, Reminder } from './types';
 import { DEFAULT_CONFIG } from './constants';
 import { parseClientData, detectInputType, normalizeCsvIfNeeded } from './utils/parser';
@@ -294,6 +295,19 @@ function App() {
         }, delay);
       }
     });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // --- Sincronização na nuvem ---
+  // Ao abrir e ao voltar para a aba: envia alterações pendentes ou baixa se outro aparelho salvou depois
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>('off');
+  useEffect(() => {
+    const unsubscribe = onSyncStatus(setSyncStatus);
+    if (consumeJustPulled()) addToast('Dados atualizados da nuvem.', 'info');
+    void syncNow();
+    const onVisible = () => { if (document.visibilityState === 'visible') void syncNow(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => { unsubscribe(); document.removeEventListener('visibilitychange', onVisible); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -850,6 +864,15 @@ function App() {
                 {resultViewMode === 'grid' ? <LayoutList size={13} /> : <LayoutGrid size={13} />}
               </button>
             </>
+          )}
+          {syncStatus !== 'off' && (
+            <button
+              onClick={() => setIsConfigOpen(true)}
+              className={`flex items-center px-2.5 py-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 dark:hover:bg-slate-700 transition-colors ${syncStatus === 'ok' ? 'text-teal-600 dark:text-teal-400' : syncStatus === 'syncing' ? 'text-gray-400' : 'text-amber-500'}`}
+              title={syncStatus === 'ok' ? 'Sincronizado' : syncStatus === 'syncing' ? 'Sincronizando...' : 'Sincronização com problema — abrir Configurações'}
+            >
+              {syncStatus === 'syncing' ? <RefreshCw size={13} className="animate-spin" /> : syncStatus === 'ok' ? <Cloud size={13} /> : <CloudOff size={13} />}
+            </button>
           )}
           <button onClick={() => setIsDarkMode(!isDarkMode)} className="flex items-center gap-1.5 bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-gray-500 dark:text-slate-400 px-3 py-2.5 rounded-xl transition-colors text-xs" title={isDarkMode ? 'Modo claro' : 'Modo escuro'}>
             {isDarkMode ? <Sun size={13} /> : <Moon size={13} />}

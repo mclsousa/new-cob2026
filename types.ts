@@ -53,6 +53,8 @@ export interface QuickLink {
 
 export interface AppConfig {
   pixKey: string;
+  pixName?: string; // Nome do recebedor no PIX copia e cola
+  pixCity?: string; // Cidade do recebedor no PIX copia e cola
   defaultTime: string; // New: Configurable time (e.g., "20:00")
   antiBanMode: boolean; // New: WhatsApp Security Mode
   plansTitle?: string; // New: Customizable title for the pricing table

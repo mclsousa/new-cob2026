@@ -1,8 +1,9 @@
 
 import React, { useMemo, useState, useEffect } from 'react';
 import { ParsedClient, AppConfig, ResultViewMode } from '../types';
+import { buildPixPayload } from '../utils/pix';
 import { extractPhone, formatDate, processSpinSyntax, applyAntiBan, extractCredentials, toWhatsappNumber } from '../utils/helpers';
-import { Copy, Phone, Edit, User, CheckCircle, ChevronDown, ChevronUp, PenTool, List, FileText, Link as LinkIcon, Lock, Key, Bell, ClockAlert, AlertCircle, AlarmClock, CalendarDays, CircleCheck } from 'lucide-react';
+import { Copy, Phone, Edit, User, CheckCircle, ChevronDown, ChevronUp, PenTool, List, FileText, Link as LinkIcon, Lock, Key, Bell, QrCode, ClockAlert, AlertCircle, AlarmClock, CalendarDays, CircleCheck } from 'lucide-react';
 
 interface ClientCardProps {
   client: ParsedClient;
@@ -170,11 +171,22 @@ const ClientCard: React.FC<ClientCardProps> = ({
         clientNameDisplay = `${client.name}, ${linkedNames}`;
     }
 
+    const pixKey = client.customPix?.trim() || config.pixKey;
+    // PIX copia e cola com o valor do 1º plano da tabela ativa (ex.: 1 mês)
+    const pixCopiaCola = () => buildPixPayload({
+        key: pixKey,
+        name: config.pixName || '',
+        city: config.pixCity || '',
+        amount: plansToUse[0]?.price,
+        txid: client.name,
+    });
+
     let msg = templateToUse
         .replace(/{saudacao}/g, saudacao)
         .replace(/{nome}/g, clientNameDisplay)
         .replace(/{vencimento}/g, vencimentoFinal)
-        .replace(/{pix}/g, client.customPix?.trim() || config.pixKey)
+        .replace(/{pix_copia_cola}/g, () => (pixKey ? pixCopiaCola() : ''))
+        .replace(/{pix}/g, pixKey)
         .replace(/{tabela_precos}/g, priceTableString)
         .replace(/{titulo_tabela}/g, tableTitle)
         .replace(/{login}/g, credentials.login || '???')
@@ -187,10 +199,10 @@ const ClientCard: React.FC<ClientCardProps> = ({
     if (plansToUse.length > 0) msg = msg.replace(/{plano1}/g, String(plansToUse[0].price));
     if (plansToUse.length > 1) msg = msg.replace(/{plano2}/g, String(plansToUse[1].price));
 
-    return { statusColor: colorClass, bgColor, activeBars, barColor, message: msg, statusText: `${prefixStr} (${formatDate(venc)})`, isCustomMessage: isCustom };
+    return { statusColor: colorClass, bgColor, activeBars, barColor, message: msg, statusText: `${prefixStr} (${formatDate(venc)})`, isCustomMessage: isCustom, pixPayload: pixKey ? pixCopiaCola() : '' };
   };
 
-  const { statusColor, bgColor, activeBars, barColor, message, statusText, isCustomMessage } = calculateCardData();
+  const { statusColor, bgColor, activeBars, barColor, message, statusText, isCustomMessage, pixPayload } = calculateCardData();
 
   const HighlightedText = ({ text, query }: { text: string, query: string }) => {
     if (!query.trim()) return <>{text}</>;
@@ -542,6 +554,7 @@ const ClientCard: React.FC<ClientCardProps> = ({
                 <button onClick={() => onLinkClient(client)} className="px-3 py-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-gray-500 dark:text-slate-400 hover:text-blue-600 transition-all" title="Vincular"><LinkIcon size={13} /></button>
                 <button onClick={() => onOpenReceipt(client)} disabled={!whatsapp} className="px-3 py-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-orange-500 hover:text-orange-600 transition-all" title="Recibo"><FileText size={13} /></button>
                 <button onClick={() => onEdit(client)} className="px-3 py-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-gray-500 dark:text-slate-400 transition-all" title="Editar"><Edit size={13} /></button>
+                <button onClick={() => onCopy(pixPayload)} disabled={!pixPayload} className="px-3 py-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-teal-600 dark:text-teal-400 transition-all disabled:opacity-30" title="Copiar PIX copia e cola"><QrCode size={13} /></button>
                 <button onClick={() => handleAction('copy')} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-gray-500 dark:text-slate-400 text-xs transition-all" title="Copiar"><Copy size={13} /><span className="hidden sm:inline">Copiar</span></button>
                 <button onClick={() => handleAction('whatsapp')} disabled={!whatsapp} className={`flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs text-white transition-all ${!whatsapp ? 'opacity-30 cursor-not-allowed bg-gray-400' : 'bg-emerald-600 hover:bg-emerald-500'}`} title="WhatsApp">
                   <WhatsappIcon size={13} /><span className="hidden sm:inline">Enviar</span>
@@ -567,6 +580,7 @@ const ClientCard: React.FC<ClientCardProps> = ({
                 {onAddReminder && (
                   <button onClick={() => onAddReminder(client)} className={`p-1.5 rounded transition-colors ${hasReminder ? 'text-violet-500' : 'text-gray-400 dark:text-slate-500 hover:text-violet-500'}`} title="Lembrete"><Bell size={15} /></button>
                 )}
+                <button onClick={() => onCopy(pixPayload)} disabled={!pixPayload} className={`p-1.5 rounded transition-colors ${!pixPayload ? 'opacity-30 cursor-not-allowed text-gray-300' : 'text-gray-400 dark:text-slate-500 hover:text-teal-500'}`} title="Copiar PIX copia e cola"><QrCode size={15} /></button>
                 <div className="flex-1" />
                 <button onClick={() => handleAction('copy')} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/70 dark:bg-slate-700/60 text-gray-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700 text-xs font-medium transition-all" title="Copiar mensagem">
                   <Copy size={13} /> Copiar

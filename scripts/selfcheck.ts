@@ -2,6 +2,8 @@
 import assert from 'node:assert/strict';
 import { parseClientData, normalizeCsvIfNeeded, detectInputType } from '../utils/parser';
 import { toWhatsappNumber, applyAntiBan, processSpinSyntax, extractPhone } from '../utils/helpers';
+import { buildPixPayload, crc16, normalizePixKey } from '../utils/pix';
+import * as syncApi from '../api/sync';
 
 const parse = (raw: string) => {
   const t = normalizeCsvIfNeeded(raw);
@@ -54,4 +56,56 @@ for (let i = 0; i < 50; i++) {
 assert.equal(processSpinSyntax('{pix} {plano1}'), '{pix} {plano1}');
 assert.ok(['Oi', 'Olá'].includes(processSpinSyntax('{Oi|Olá}')));
 
-console.log('selfcheck ok');
+// PIX copia e cola: CRC do exemplo do manual do BR Code (Banco Central)
+const BCB_EXAMPLE = '00020126580014br.gov.bcb.pix0136123e4567-e12b-12d1-a456-4266554400005204000053039865802BR5913Fulano de Tal6008BRASILIA62070503***6304';
+assert.equal(crc16(BCB_EXAMPLE), '1D3D');
+
+const brcode = buildPixPayload({ key: 'Tec.BR@hotmail.com', name: 'João da Silva', city: 'São Paulo', amount: 35, txid: 'joao01' });
+assert.ok(brcode.includes('0118tec.br@hotmail.com'));     // chave normalizada (e-mail minúsculo)
+assert.ok(brcode.includes('540535.00'));                  // valor com 2 casas
+assert.ok(brcode.includes('5913JOAO DA SILVA6009SAO PAULO')); // sem acento, maiúsculo
+assert.ok(brcode.includes('62100506joao01'));             // txid = login do cliente
+assert.equal(brcode.slice(-4), crc16(brcode.slice(0, -4))); // CRC confere
+assert.equal(normalizePixKey('(21) 99979-4635'), '+5521999794635');
+assert.equal(normalizePixKey('123.456.789-09'), '12345678909');
+assert.equal(normalizePixKey('+55 21 99979-4635'), '+5521999794635');
+
+// Anti-ban não toca na linha do PIX copia e cola (qualquer byte a mais quebra o CRC)
+for (let i = 0; i < 50; i++) assert.ok(applyAntiBan(`Pague com:\n${brcode}\nObrigado a todos`).includes(brcode));
+
+// /api/sync com Redis falso em memória (REST do Upstash: POST com o comando em JSON)
+const db = new Map<string, string>();
+process.env.KV_REST_API_URL = 'http://redis.test';
+process.env.KV_REST_API_TOKEN = 't';
+process.env.SYNC_PASSWORD = 'segredo';
+globalThis.fetch = (async (_url: string, init: RequestInit) => {
+  const [cmd, key, val] = JSON.parse(String(init.body)) as string[];
+  let result: unknown = 'OK';
+  if (cmd === 'GET') result = db.get(key) ?? null;
+  else if (cmd === 'SET') db.set(key, val);
+  else if (cmd === 'INCR') { result = Number(db.get(key) || 0) + 1; db.set(key, String(result)); }
+  return new Response(JSON.stringify({ result }));
+}) as typeof fetch;
+
+const req = (method: string, pass: string, body?: unknown, ip = '1.1.1.1') =>
+  new Request('http://x/api/sync', {
+    method, body: body && JSON.stringify(body),
+    headers: { authorization: `Bearer ${pass}`, 'x-forwarded-for': ip },
+  });
+
+(async () => {
+  assert.equal((await syncApi.GET(req('GET', 'segredo'))).status, 404);
+  assert.equal((await syncApi.GET(req('GET', 'errada'))).status, 401);
+  const put = await syncApi.PUT(req('PUT', 'segredo', { data: { customNotes: '{}', hacker: 'x' }, baseUpdatedAt: 0 }));
+  assert.equal(put.status, 200);
+  const { updatedAt } = await put.json();
+  const got = await (await syncApi.GET(req('GET', 'segredo'))).json();
+  assert.deepEqual(got.data, { customNotes: '{}' }); // chave desconhecida descartada
+  // base antiga = outro aparelho salvou depois -> 409 com o estado atual
+  assert.equal((await syncApi.PUT(req('PUT', 'segredo', { data: {}, baseUpdatedAt: updatedAt - 1 }))).status, 409);
+  assert.equal((await syncApi.PUT(req('PUT', 'segredo', { data: { customNotes: 1 } }))).status, 400);
+  // 10 senhas erradas bloqueiam o IP, mesmo depois com a senha certa
+  for (let i = 0; i < 10; i++) await syncApi.GET(req('GET', 'x', undefined, '9.9.9.9'));
+  assert.equal((await syncApi.GET(req('GET', 'segredo', undefined, '9.9.9.9'))).status, 429);
+  console.log('selfcheck ok');
+})();
