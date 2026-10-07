@@ -1,0 +1,5 @@
+node_modules/
+dist/
+# dados de clientes (login/senha/telefone) - nunca versionar
+*.csv
+.env*
