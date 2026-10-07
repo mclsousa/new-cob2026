@@ -1,5 +1,22 @@
 # Melhorias Aplicadas — Ferramenta de Cobrança
 
+## 9. App Android nativo (Capacitor)
+
+- O APK deixa de ser TWA (site aberto pelo Chrome) e vira app nativo com o app
+  web empacotado (`capacitor.config.ts`, pasta `android/`). Mesmo id e mesma
+  assinatura: instala por cima do anterior.
+- Lembretes e resumo diário são **alarmes locais exatos** do Android
+  (`utils/native.ts`): chegam na hora, sem Chrome, sem internet e com o app
+  fechado. Os resumos dos próximos 14 dias são reagendados a cada mudança.
+- No app: sincronização chama `https://new-cob2026.vercel.app` (CORS liberado
+  para `https://localhost` em `api/_shared.ts`), WhatsApp abre pelo sistema e
+  CSV/backup usam o compartilhar do Android.
+- Ícone e abertura novos (roxo da marca). Build: `.github/workflows/android.yml`
+  compila o web, roda `cap sync` e gera o APK assinado (JDK 21) a cada push.
+- Dados do APK antigo (TWA) ficam no Chrome: ligue a sincronização para trazê-los.
+
+---
+
 ## 8. Redesign (design system Dataviz) e novas funções
 
 - **Visual:** tema claro padrão + escuro; roxo `#5E17EB`, Roboto, cards com

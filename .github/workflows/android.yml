@@ -1,4 +1,5 @@
-# Gera o APK Android (TWA) assinado e publica como Release no GitHub.
+# Gera o APK Android nativo (Capacitor) assinado e publica como Release no GitHub.
+# O app web vai empacotado dentro do APK, então todo push na main gera uma versão nova.
 # Link fixo da versão mais recente:
 #   https://github.com/mclsousa/new-cob2026/releases/latest/download/TVBR.Cob.apk
 # Segredos necessários: ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD
@@ -8,7 +9,7 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: ['android/**', '.github/workflows/android.yml']
+    paths-ignore: ['**.md', '.github/workflows/notify.yml']
 
 permissions:
   contents: write
@@ -19,14 +20,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '21' # Capacitor 8 exige JDK 21
 
-      - uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.10.2'
+      - name: Compilar app web e copiar para o Android
+        run: |
+          npm ci
+          npm run build
+          npx cap sync android
 
       - name: Restaurar chave de assinatura
         env:
@@ -38,7 +46,8 @@ jobs:
           VERSION_CODE: ${{ github.run_number }}
           KEYSTORE_PATH: ${{ runner.temp }}/release.jks
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-        run: gradle -p android assembleRelease --no-daemon
+        working-directory: android
+        run: chmod +x gradlew && ./gradlew assembleRelease --no-daemon
 
       - name: Conferir assinatura
         run: |
@@ -52,10 +61,11 @@ jobs:
           path: TVBR.Cob.apk
 
       - name: Publicar Release
+        if: github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "apk-v1.0.${{ github.run_number }}" TVBR.Cob.apk \
-            --title "TVBR.Cob Android v1.0.${{ github.run_number }}" \
-            --notes "APK Android do TVBR.Cob. Baixe e instale no celular (permita instalar de fontes desconhecidas)." \
+          gh release create "apk-v2.0.${{ github.run_number }}" TVBR.Cob.apk \
+            --title "TVBR.Cob Android v2.0.${{ github.run_number }}" \
+            --notes "App Android nativo do TVBR.Cob. Baixe e instale no celular (permita instalar de fontes desconhecidas). Instala por cima da versão anterior." \
             --latest
