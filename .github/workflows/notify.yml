@@ -15,4 +15,7 @@ jobs:
       - name: Disparar verificação
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
-        run: curl -fsS --max-time 60 -H "Authorization: Bearer $CRON_SECRET" https://new-cob2026.vercel.app/api/daily
+        run: |
+          # Sem o segredo cadastrado ainda: não faz nada (evita falha e e-mail a cada hora)
+          if [ -z "$CRON_SECRET" ]; then echo "CRON_SECRET não configurado: pulando"; exit 0; fi
+          curl -fsS --max-time 60 -H "Authorization: Bearer $CRON_SECRET" https://new-cob2026.vercel.app/api/daily
