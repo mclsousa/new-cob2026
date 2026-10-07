@@ -16,7 +16,9 @@ const ACTION_LABEL: Record<ActionLog['action'], { label: string; tone: Tone }> =
   copy: { label: 'Copiado', tone: 'info' },
   mark: { label: 'Marcado', tone: 'graphite' },
   receipt: { label: 'Recibo', tone: 'warn' },
+  pix: { label: 'PIX', tone: 'ok' },
 };
+const actionInfo = (a: string) => ACTION_LABEL[a as ActionLog['action']] || { label: a, tone: 'graphite' as Tone };
 
 interface DashboardProps {
   clients: StoredClient[];
@@ -181,7 +183,7 @@ const Dashboard: React.FC<DashboardProps> = ({ clients, payments, history, confi
                         <button onClick={() => onOpenProfile(h.clientName)} className="block text-sm text-ink hover:text-brand truncate max-w-full text-left">{h.clientName}</button>
                         <p className="text-[11px] text-muted">{new Date(h.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
                       </div>
-                      <Badge tone={ACTION_LABEL[h.action].tone}>{ACTION_LABEL[h.action].label}</Badge>
+                      <Badge tone={actionInfo(h.action).tone}>{actionInfo(h.action).label}</Badge>
                     </li>
                   ))}
                 </ul>

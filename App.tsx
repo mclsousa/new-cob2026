@@ -20,6 +20,7 @@ import PaymentModal, { PaymentInput } from './components/PaymentModal';
 import LinkClientsModal from './components/LinkClientsModal';
 import ReminderModal from './components/ReminderModal';
 import ClientProfile from './components/ClientProfile';
+import ErrorBoundary from './components/ErrorBoundary';
 import ImportModal from './components/ImportModal';
 import { Button, Modal, Menu, cx } from './components/ui';
 import { Progress } from './components/charts';
@@ -777,6 +778,7 @@ function App() {
                 </div>
               </div>
             )}
+            <ErrorBoundary key={page} onReset={() => goto('dashboard')}>
             {page === 'dashboard' && (
               <Dashboard
                 clients={clientDatabase}
@@ -848,6 +850,7 @@ function App() {
                 counts={{ clients: clientDatabase.length, payments: payments.length, history: actionHistory.length }}
               />
             )}
+            </ErrorBoundary>
           </div>
         </main>
       </div>

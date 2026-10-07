@@ -28,6 +28,7 @@ const ACTION_INFO: Record<ActionLog['action'], { label: string; icon: typeof Sen
   copy: { label: 'Mensagem copiada', icon: Copy },
   mark: { label: 'Marcado como enviado', icon: MousePointerClick },
   receipt: { label: 'Recibo enviado', icon: Receipt },
+  pix: { label: 'Chave PIX enviada', icon: Send },
 };
 
 const ClientProfile: React.FC<ClientProfileProps> = props => {

@@ -11,8 +11,11 @@ const ACTION: Record<ActionLog['action'] | 'payment', { label: string; tone: Ton
   copy: { label: 'Mensagem copiada', tone: 'info' },
   mark: { label: 'Marcado', tone: 'graphite' },
   receipt: { label: 'Recibo enviado', tone: 'warn' },
+  pix: { label: 'PIX enviado', tone: 'ok' },
   payment: { label: 'Pagamento', tone: 'brand' },
 };
+// Ação gravada por uma versão antiga/futura do app: mostra genérico em vez de travar a página
+const actionInfo = (a: string) => ACTION[a as keyof typeof ACTION] || { label: a, tone: 'graphite' as Tone };
 
 interface Row { key: string; at: number; name: string; action: keyof typeof ACTION; amount?: number; detail?: string }
 
@@ -68,7 +71,7 @@ const History: React.FC<{ history: ActionLog[]; payments: PaymentRecord[]; onOpe
                   <tr key={r.key} className="hover:bg-subtle/70">
                     <td className="px-5 py-2.5 text-muted text-xs">{new Date(r.at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</td>
                     <td className="px-3 py-2.5"><button onClick={() => onOpenProfile(r.name)} className="font-medium text-ink hover:text-brand text-left">{r.name}</button></td>
-                    <td className="px-3 py-2.5"><Badge tone={ACTION[r.action].tone} solid={r.action === 'payment'}>{ACTION[r.action].label}</Badge></td>
+                    <td className="px-3 py-2.5"><Badge tone={actionInfo(r.action).tone} solid={r.action === 'payment'}>{actionInfo(r.action).label}</Badge></td>
                     <td className="px-3 py-2.5 text-xs text-muted hidden md:table-cell">{r.detail || '—'}</td>
                     <td className="px-5 py-2.5 text-right text-ink">{r.amount !== undefined ? formatBRL(r.amount) : ''}</td>
                   </tr>

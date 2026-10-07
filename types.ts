@@ -89,7 +89,7 @@ export interface ActionLog {
   clientId: string;
   clientName: string;
   timestamp: number;
-  action: 'whatsapp' | 'copy' | 'mark' | 'receipt';
+  action: 'whatsapp' | 'copy' | 'mark' | 'receipt' | 'pix'; // 'pix': legado (envio do PIX separado, removido)
 }
 
 export interface PaymentRecord {
