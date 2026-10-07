@@ -1,5 +1,39 @@
 # Melhorias Aplicadas — Ferramenta de Cobrança
 
+## 8. Redesign (design system Dataviz) e novas funções
+
+- **Visual:** tema claro padrão + escuro; roxo `#5E17EB`, Roboto, cards com
+  raio pequeno. Tokens em `index.html`; componentes base em `components/ui.tsx`
+  e gráficos SVG em `components/charts.tsx`.
+- **Páginas:** Painel (KPIs, vencimentos 14 dias, recebimentos 30 dias,
+  carteira), Cobranças, Clientes (tabela), Histórico (30 dias), Configurações.
+  Importar lista virou modal.
+- **Pagamentos:** botão "Pago" registra valor/plano, renova o vencimento no
+  banco e envia o recibo (substitui "Gerar Recibo"). Chave `payments` no
+  sync/backup. O banco mantém o vencimento mais novo ao reprocessar.
+- **Filtros unificados:** Hoje / Amanhã (sexta = fim de semana) / Vencidos
+  4–5d / 7 dias / Personalizado + tipo, status e etiqueta.
+- **Removidos:** modo anti-ban e links rápidos.
+- **Previsão de receita** (Painel): 7 e 30 dias + "a recuperar", pelo último
+  pagamento de cada titular (sem histórico: 1º plano da tabela).
+- **Ficha do cliente**: plano, total pago, risco e linha do tempo (90 dias).
+- **Em risco** (automático): 2+ cobranças em dias diferentes sem pagamento depois,
+  ou 2+ pagamentos atrasados entre os 6 últimos (`riskByName`).
+- **Notificações** (aba própria): resumo diário no horário escolhido (o que
+  incluir: vencidos, amanhã, em risco), lembretes agendados por push e faixa ao
+  abrir o app. `api/daily.ts` roda de hora em hora pelo GitHub Actions
+  (`.github/workflows/notify.yml`, plano gratuito da Vercel só agenda 1x/dia);
+  inscrição em `api/push.ts`, `public/sw.js`. APK: delegação de notificações do
+  TWA. Envs: VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, CRON_SECRET (também como
+  segredo no GitHub). Requer a sincronização ligada.
+- Recibo foi para a aba Mensagens. Revisão de espaçamento mobile/web: filtros em
+  grade (`ChipGroup`), cards em duas colunas independentes, texto das etiquetas
+  com contraste automático.
+- Selo "Enviado" dura 12h. Importar arquivo substitui o anterior do mesmo tipo
+  (`mergeImport`). Nome/cidade do PIX removidos (copia e cola usa padrão).
+
+---
+
 ## 7. Sincronização na nuvem e PIX copia e cola
 
 - **Sincronização:** Configurações → Geral → "Sincronização na nuvem". Dados no

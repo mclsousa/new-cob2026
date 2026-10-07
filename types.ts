@@ -13,13 +13,6 @@ export interface ParsedClient {
   type: 'iptv' | 'p2p';
 }
 
-export interface ProcessingStats {
-  totalParsed: number;
-  invalidLines: number;
-  filteredCount: number;
-  type: 'iptv' | 'p2p' | 'mixed';
-}
-
 export interface MessageTemplate {
   id: string;
   label: string;
@@ -45,23 +38,13 @@ export interface PlanGroup {
   plans: PricingPlan[];
 }
 
-export interface QuickLink {
-  id: string;
-  label: string;
-  url: string;
-}
-
 export interface AppConfig {
   pixKey: string;
-  pixName?: string; // Nome do recebedor no PIX copia e cola
-  pixCity?: string; // Cidade do recebedor no PIX copia e cola
   defaultTime: string; // New: Configurable time (e.g., "20:00")
-  antiBanMode: boolean; // New: WhatsApp Security Mode
   plansTitle?: string; // New: Customizable title for the pricing table
   plans: PricingPlan[]; // Legacy support (Main default plans)
   planGroups: PlanGroup[]; // New: Multiple Pricing Tables
   priceLineFormat?: string; // New: Format for the price line (e.g. "{nome} - R$ {valor}")
-  quickLinks: QuickLink[]; // New: Bank of quick links
   templates: {
     normal: string;
     expired: string;
@@ -69,10 +52,27 @@ export interface AppConfig {
     additional: MessageTemplate[]; // Multiple templates support
   };
   tags: ClientTag[]; // New: Available tags
+  notifications?: Partial<NotifySettings>; // aba Notificações (sincronizada: o servidor lê para o push)
 }
 
-export type ViewMode = 'input' | 'results';
-export type ResultViewMode = 'grid' | 'list' | 'focus'; // Added 'focus'
+export interface NotifySettings {
+  dailyEnabled: boolean;   // resumo diário por push
+  dailyHour: number;       // hora (Brasília) do resumo, 0–23
+  includeOverdue: boolean; // resumo inclui vencidos 4–5 dias
+  includeTomorrow: boolean;
+  includeRisk: boolean;    // resumo inclui clientes em risco
+  reminders: boolean;      // lembretes agendados também por push
+  banner: boolean;         // faixa "Resumo de hoje" ao abrir o app
+}
+
+export type ResultViewMode = 'grid' | 'list' | 'focus';
+
+export type Page = 'dashboard' | 'billing' | 'clients' | 'history' | 'settings';
+
+// Filtros da página Cobranças
+export type PeriodPreset = 'today' | 'tomorrow' | 'overdue' | 'week' | 'custom';
+export type StatusFilter = 'all' | 'pending' | 'sent' | 'paid';
+export type TypeFilter = 'all' | 'iptv' | 'p2p';
 
 export interface DateRange {
   start: string;
@@ -83,13 +83,6 @@ export interface ToastMessage {
   id: number;
   text: string;
   type: 'success' | 'error' | 'info' | 'warning';
-}
-
-export interface DashboardStats {
-  total: number;
-  expired: number;
-  today: number;
-  potentialRevenue: number;
 }
 
 export interface ActionLog {
@@ -104,7 +97,10 @@ export interface PaymentRecord {
   clientId: string;
   clientName: string;
   amount: number;
-  paidAt: number; // timestamp
+  paidAt: number; // timestamp do registro
+  planLabel?: string;
+  newDueDate: string; // ISO: vencimento após a renovação
+  prevDueDate?: string; // ISO: vencimento antes do pagamento (para saber se pagou atrasado)
 }
 
 export interface StoredClient {

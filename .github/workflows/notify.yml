@@ -1,0 +1,18 @@
+# Verificação de notificações de hora em hora (resumo diário no horário escolhido + lembretes).
+# Roda no GitHub porque o plano gratuito da Vercel só permite agendamento 1x por dia.
+# Segredo necessário no repositório: CRON_SECRET (o mesmo valor da env CRON_SECRET na Vercel).
+name: Notificações
+
+on:
+  schedule:
+    - cron: '5 * * * *' # a cada hora, minuto 5 (o GitHub pode atrasar alguns minutos)
+  workflow_dispatch:
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Disparar verificação
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: curl -fsS --max-time 60 -H "Authorization: Bearer $CRON_SECRET" https://new-cob2026.vercel.app/api/daily

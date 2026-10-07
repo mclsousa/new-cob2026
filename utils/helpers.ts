@@ -44,19 +44,6 @@ export const processSpinSyntax = (text: string): string => {
   });
 };
 
-// Apply Anti-Ban invisible characters
-// Insere o caractere invisível só ENTRE palavras (após espaços). Dentro de uma
-// palavra ele corromperia a chave PIX, links e números que o cliente copia.
-export const applyAntiBan = (text: string): string => {
-  if (!text) return text;
-  const invisibleChar = String.fromCharCode(0x200b); // Zero Width Space
-  return text
-    .split('\n')
-    // linha com PIX copia e cola fica intacta: qualquer byte a mais invalida o CRC
-    .map(line => (/br\.gov\.bcb\.pix/i.test(line) ? line : line.replace(/ /g, (space) => (Math.random() < 0.3 ? space + invisibleChar : space))))
-    .join('\n');
-};
-
 import { isSyncKey } from './syncKeys';
 import { markDirty } from './sync';
 

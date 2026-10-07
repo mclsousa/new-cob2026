@@ -306,3 +306,18 @@ export const normalizeCsvIfNeeded = (input: string): string => {
         .map(line => splitCsvLine(line, sep).join(' '))
         .join('\n');
 };
+
+/**
+ * Junta um arquivo novo à lista atual SUBSTITUINDO o anterior do mesmo tipo:
+ * relatório IPTV novo troca o IPTV antigo e mantém o P2P (e vice-versa).
+ * Texto em formato desconhecido (sem "Clientes IPTV/P2P") substitui tudo.
+ */
+export const mergeImport = (prev: string, incoming: string): string => {
+    const blocks = (t: string) => t.split(/\n\s*\n/).map(b => b.trim()).filter(Boolean);
+    const kind = (b: string) => (b.startsWith('Clientes IPTV') ? 'iptv' : b.startsWith('Clientes P2P') ? 'p2p' : null);
+    const newBlocks = blocks(incoming);
+    const newKinds = new Set(newBlocks.map(kind));
+    if (newKinds.has(null)) return incoming.trim();
+    const kept = blocks(prev).filter(b => { const k = kind(b); return k !== null && !newKinds.has(k); });
+    return [...kept, ...newBlocks].join('\n\n');
+};

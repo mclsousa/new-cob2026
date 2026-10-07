@@ -10,6 +10,7 @@ export const SYNC_KEYS = [
   'clientLinks',
   'clientDatabase',
   'reminders',
+  'payments',
   'sentClientsHistory',
   'actionHistory',
   'lastInputData',

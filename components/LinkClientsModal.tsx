@@ -1,15 +1,15 @@
-
 import React, { useState, useEffect } from 'react';
 import { ParsedClient } from '../types';
-import { X, Link as LinkIcon, Search, CheckCircle, UserPlus, Trash2 } from 'lucide-react';
+import { Link as LinkIcon, Search, Check } from 'lucide-react';
 import { formatDate } from '../utils/helpers';
+import { Modal, Button, inputCls, cx } from './ui';
 
 interface LinkClientsModalProps {
   isOpen: boolean;
   onClose: () => void;
   masterClient: ParsedClient | null;
-  allClients: ParsedClient[]; // Flattened list of available clients
-  onSave: (master: ParsedClient, selectedDependents: string[]) => void; // returns names of dependents
+  allClients: ParsedClient[]; // lista plana dos clientes processados
+  onSave: (master: ParsedClient, selectedDependents: string[]) => void; // nomes dos dependentes
 }
 
 const LinkClientsModal: React.FC<LinkClientsModalProps> = ({ isOpen, onClose, masterClient, allClients, onSave }) => {
@@ -18,118 +18,62 @@ const LinkClientsModal: React.FC<LinkClientsModalProps> = ({ isOpen, onClose, ma
 
   useEffect(() => {
     if (isOpen && masterClient) {
-      // Pre-select existing links if any
-      const existing = masterClient.linked?.map(c => c.name) || [];
-      setSelectedNames(existing);
+      setSelectedNames(masterClient.linked?.map(c => c.name) || []);
       setSearchTerm('');
     }
   }, [isOpen, masterClient]);
 
-  const toggleSelection = (name: string) => {
-    setSelectedNames(prev => 
-      prev.includes(name) 
-        ? prev.filter(n => n !== name) 
-        : [...prev, name]
-    );
-  };
-
-  const handleSave = () => {
-    if (masterClient) {
-      onSave(masterClient, selectedNames);
-      onClose();
-    }
-  };
-
   if (!isOpen || !masterClient) return null;
 
-  // Filter candidates:
-  // 1. Exclude the master client itself
-  // 2. Filter by search term
-  const candidates = allClients.filter(c => 
-    c.name !== masterClient.name && 
-    c.name.toLowerCase().includes(searchTerm.toLowerCase())
+  const toggle = (name: string) =>
+    setSelectedNames(prev => (prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name]));
+
+  const candidates = allClients.filter(c =>
+    c.name !== masterClient.name && c.name.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
-      <div className="bg-surface-light dark:bg-surface-dark rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col border border-gray-200 dark:border-gray-700">
-        
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-100 dark:border-gray-700 bg-blue-50 dark:bg-blue-900/10 rounded-t-xl">
-          <div>
-            <h3 className="text-lg font-bold text-gray-800 dark:text-white flex items-center gap-2">
-              <LinkIcon size={20} className="text-blue-500" /> Vincular Contas
-            </h3>
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-              Titular: <span className="font-bold text-blue-600 dark:text-blue-400">{masterClient.name}</span>
-            </p>
-          </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-800 dark:hover:text-gray-200">
-            <X size={20} />
-          </button>
-        </div>
-
-        {/* Search */}
-        <div className="p-4 border-b border-gray-100 dark:border-gray-700">
-          <div className="relative">
-             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-500" size={14} />
-             <input
-                type="text"
-                placeholder="Buscar dependente..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 text-xs outline-none focus:ring-2 focus:ring-emerald-500 placeholder-gray-400 dark:placeholder-slate-500"
-             />
-          </div>
-        </div>
-
-        {/* List */}
-        <div className="flex-1 overflow-y-auto p-2 space-y-1">
-          {candidates.length === 0 ? (
-            <div className="text-center py-8 text-gray-400">
-               <p className="text-sm">Nenhum cliente encontrado.</p>
-            </div>
-          ) : (
-            candidates.map(client => {
-               const isSelected = selectedNames.includes(client.name);
-               return (
-                 <div 
-                    key={client.id}
-                    onClick={() => toggleSelection(client.name)}
-                    className={`flex items-center justify-between p-3 rounded-lg cursor-pointer transition-colors border ${isSelected ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800' : 'bg-white dark:bg-gray-800 border-transparent hover:bg-gray-50 dark:hover:bg-gray-700'}`}
-                 >
-                    <div className="flex flex-col">
-                        <span className={`text-sm font-bold ${isSelected ? 'text-blue-700 dark:text-blue-300' : 'text-gray-700 dark:text-gray-300'}`}>
-                            {client.name}
-                        </span>
-                        <span className="text-xs text-gray-400">
-                            Vence: {formatDate(client.dueDate)}
-                        </span>
-                    </div>
-                    <div className={`w-5 h-5 rounded-full border flex items-center justify-center ${isSelected ? 'bg-blue-500 border-blue-500 text-white' : 'border-gray-300 dark:border-gray-600'}`}>
-                        {isSelected && <CheckCircle size={12} />}
-                    </div>
-                 </div>
-               );
-            })
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="p-4 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 rounded-b-xl flex justify-between items-center">
-            <div className="text-xs text-gray-500">
-                {selectedNames.length} selecionado(s)
-            </div>
-            <button 
-                onClick={handleSave}
-                className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-2.5 rounded-xl text-xs font-semibold transition-all active:scale-[0.97]"
-            >
-                <LinkIcon size={13} /> Salvar Vínculos
-            </button>
-        </div>
-
+    <Modal
+      open
+      onClose={onClose}
+      title="Vincular contas"
+      subtitle={<>Titular: <span className="text-brand font-medium">{masterClient.name}</span></>}
+      icon={LinkIcon}
+      footer={
+        <>
+          <span className="text-xs text-muted mr-auto">{selectedNames.length} selecionado(s)</span>
+          <Button variant="primary" icon={LinkIcon} onClick={() => { onSave(masterClient, selectedNames); onClose(); }}>Salvar vínculos</Button>
+        </>
+      }
+    >
+      <div className="relative mb-3">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" size={14} />
+        <input type="text" placeholder="Buscar dependente..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className={cx(inputCls, 'pl-9')} />
       </div>
-    </div>
+      <div className="border border-line rounded-md divide-y divide-line max-h-[45vh] overflow-y-auto">
+        {candidates.length === 0 ? (
+          <p className="text-center py-8 text-sm text-muted">Nenhum cliente encontrado.</p>
+        ) : candidates.map(client => {
+          const isSelected = selectedNames.includes(client.name);
+          return (
+            <button
+              key={client.id}
+              type="button"
+              onClick={() => toggle(client.name)}
+              className={cx('w-full flex items-center justify-between px-3 py-2.5 text-left transition-colors', isSelected ? 'bg-brand-soft' : 'hover:bg-subtle')}
+            >
+              <span>
+                <span className={cx('block text-sm font-medium', isSelected ? 'text-brand' : 'text-ink')}>{client.name}</span>
+                <span className="text-xs text-muted">Vence {formatDate(client.dueDate)}</span>
+              </span>
+              <span className={cx('w-5 h-5 rounded border flex items-center justify-center', isSelected ? 'bg-brand border-brand text-white' : 'border-line')}>
+                {isSelected && <Check size={12} />}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </Modal>
   );
 };
 

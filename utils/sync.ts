@@ -2,6 +2,7 @@
 // local; este módulo envia o snapshot para /api/sync e baixa quando outro aparelho
 // salvou algo mais novo. Baixar = gravar no localStorage e recarregar a página.
 import { SYNC_KEYS, type SyncData } from './syncKeys';
+import { apiUrl } from './native';
 
 export type SyncStatus = 'off' | 'syncing' | 'ok' | 'offline' | 'auth' | 'error';
 
@@ -33,9 +34,10 @@ export const onSyncStatus = (fn: (s: SyncStatus) => void) => {
   return () => { listeners.delete(fn); };
 };
 export const isSyncEnabled = () => !!ls.get(PASS_KEY);
+export const getSyncPassword = () => ls.get(PASS_KEY);
 
 const api = (password: string, method: 'GET' | 'PUT', body?: unknown) =>
-  fetch('/api/sync', {
+  fetch(apiUrl('/api/sync'), {
     method,
     headers: { authorization: `Bearer ${password}`, 'content-type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),

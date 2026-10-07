@@ -1,305 +1,261 @@
-
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
-  Sun, Moon, Filter, Trash2, Search, ArrowLeft, Download, Settings, Users,
-  CalendarX, AlertTriangle, Info, CalendarCheck, LayoutGrid, LayoutList,
-  History, Play, X, ChevronLeft, ChevronRight, CheckCircle, Clock, Link as LinkIcon, Copy, MessageSquare, ExternalLink,
-  Clipboard, Rocket, Upload, AlertOctagon, Menu, Database, Bell, Cloud, CloudOff, RefreshCw
+  Sun, Moon, Search, ArrowLeft, ChevronLeft, ChevronRight, Copy, X, Rocket, Upload, AlertOctagon, Menu as MenuIcon,
+  Bell, Cloud, CloudOff, RefreshCw, LayoutDashboard, Send, Users, History as HistoryIcon, Settings as SettingsIcon,
+  CheckCircle2, AlertTriangle, Info, XCircle, Sunrise,
 } from 'lucide-react';
 import { onSyncStatus, syncNow, consumeJustPulled, type SyncStatus } from './utils/sync';
-import { ParsedClient, AppConfig, ViewMode, ResultViewMode, ToastMessage, DateRange, ActionLog, StoredClient, Reminder } from './types';
+import {
+  ParsedClient, AppConfig, ResultViewMode, ToastMessage, DateRange, ActionLog, StoredClient, Reminder,
+  PaymentRecord, Page, PeriodPreset, StatusFilter, TypeFilter,
+} from './types';
 import { DEFAULT_CONFIG } from './constants';
-import { parseClientData, detectInputType, normalizeCsvIfNeeded } from './utils/parser';
+import { parseClientData, detectInputType, normalizeCsvIfNeeded, mergeImport } from './utils/parser';
 import { extractPhone, extractPhoneValidated, generateCSV, formatDateShort, toInputDate, formatDate, downloadBlob, toWhatsappNumber, loadJSON, saveItem } from './utils/helpers';
 import { getWeekdayContext, getUpcomingRange } from './utils/calendar';
+import { lastPaymentByName, isRecentlyPaid, storedToParsed, formatBRL, riskByName, dailySummary, DailySummary, notifySettings } from './utils/billing';
 import ClientCard from './components/ClientCard';
-import ConfigModal from './components/ConfigModal';
 import EditClientModal from './components/EditClientModal';
-import ReceiptModal from './components/ReceiptModal';
+import PaymentModal, { PaymentInput } from './components/PaymentModal';
 import LinkClientsModal from './components/LinkClientsModal';
 import ReminderModal from './components/ReminderModal';
-import DatabaseModal from './components/DatabaseModal';
-import { HistorySidebar, LinksSidebar } from './components/Sidebars';
+import ClientProfile from './components/ClientProfile';
+import ImportModal from './components/ImportModal';
+import { Button, Modal, Menu, cx } from './components/ui';
+import { Progress } from './components/charts';
+import { registerServiceWorker } from './utils/push';
+import { openExternal, saveFile, isNative, rescheduleNative, onNativeNotificationTap } from './utils/native';
+import { RESCHEDULE_EVENT } from './components/NativeNotifySection';
+import Dashboard from './pages/Dashboard';
+import Billing from './pages/Billing';
+import Clients from './pages/Clients';
+import History from './pages/History';
+import Settings from './pages/Settings';
 
-const TvBrIcon = ({ size = 32 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" fill="#10b981">
-    <path d="M3,20l0,5.997c-0,0.796 0.316,1.559 0.879,2.121c0.562,0.563 1.325,0.879 2.121,0.879l0.003,-0l0,-1.997l-1.003,-0c-0.552,0 -1,-0.448 -1,-1c-0,-0.552 0.448,-1 1,-1c0,-0 3,-0 3,-0c0.552,-0 1,-0.448 1,-1c0,-0.552 -0.448,-1 -1,-1c-0,-0 -2,0 -2,0c-1.656,0 -3,-1.344 -3,-3Zm0,-0c0,-1.656 1.344,-3 3,-3l0.003,0l0,-1c0,-0.552 0.449,-1 1,-1c0.552,-0 1,0.448 1,1l0,1l0.997,0c0.552,0 1,0.448 1,1c-0,0.552 -0.448,1 -1,1l-3,0c-0.552,0 -1,0.448 -1,1c0,0.552 0.448,1 1,1c0,0 2,-0 2,-0c1.656,-0 3,1.344 3,3c0,1.655 -1.342,2.998 -2.997,3l0,1.997l17.987,-0c1.657,-0 3,-1.343 3,-3l0,-15.059l-25.99,0.053l0,9.009Zm20.99,2.5c-0.69,0 -1.25,0.56 -1.25,1.25c0,0.69 0.56,1.25 1.25,1.25c0.69,0 1.25,-0.56 1.25,-1.25c0,-0.69 -0.56,-1.25 -1.25,-1.25Zm-4,0c-0.69,0 -1.25,0.56 -1.25,1.25c0,0.69 0.56,1.25 1.25,1.25c0.69,0 1.25,-0.56 1.25,-1.25c0,-0.69 -0.56,-1.25 -1.25,-1.25Zm-4,0c-0.69,0 -1.25,0.56 -1.25,1.25c0,0.69 0.56,1.25 1.25,1.25c0.69,0 1.25,-0.56 1.25,-1.25c0,-0.69 -0.56,-1.25 -1.25,-1.25Zm8,-4.75c-0.69,0 -1.25,0.56 -1.25,1.25c0,0.69 0.56,1.25 1.25,1.25c0.69,0 1.25,-0.56 1.25,-1.25c0,-0.69 -0.56,-1.25 -1.25,-1.25Zm-4,0c-0.69,0 -1.25,0.56 -1.25,1.25c0,0.69 0.56,1.25 1.25,1.25c0.69,0 1.25,-0.56 1.25,-1.25c0,-0.69 -0.56,-1.25 -1.25,-1.25Zm-4,0c-0.69,0 -1.25,0.56 -1.25,1.25c0,0.69 0.56,1.25 1.25,1.25c0.69,0 1.25,-0.56 1.25,-1.25c0,-0.69 -0.56,-1.25 -1.25,-1.25Zm8,-4.75c-0.69,0 -1.25,0.56 -1.25,1.25c0,0.69 0.56,1.25 1.25,1.25c0.69,0 1.25,-0.56 1.25,-1.25c0,-0.69 -0.56,-1.25 -1.25,-1.25Zm-4,0c-0.69,0 -1.25,0.56 -1.25,1.25c0,0.69 0.56,1.25 1.25,1.25c0.69,0 1.25,-0.56 1.25,-1.25c0,-0.69 -0.56,-1.25 -1.25,-1.25Zm-4,0c-0.69,0 -1.25,0.56 -1.25,1.25c0,0.69 0.56,1.25 1.25,1.25c0.69,0 1.25,-0.56 1.25,-1.25c0,-0.69 -0.56,-1.25 -1.25,-1.25Zm-4,0c-0.69,0 -1.25,0.56 -1.25,1.25c0,0.69 0.56,1.25 1.25,1.25c0.69,0 1.25,-0.56 1.25,-1.25c0,-0.69 -0.56,-1.25 -1.25,-1.25Zm-4.971,-9.993l-1.019,-0c-1.657,-0 -3,1.343 -3,3l0,2.984l25.99,-0.053l0,-2.931c0,-1.657 -1.343,-3 -3,-3l-1,-0l0,2.993c0,0.552 -0.448,1 -1,1c-0.552,-0 -1,-0.448 -1,-1l0,-2.993l-2,-0l0,2.993c0,0.552 -0.448,1 -1,1c-0.552,-0 -1,-0.448 -1,-1l0,-2.993l-1.99,-0l-0,2.993c0,0.552 -0.448,1 -1,1c-0.552,0 -1,-0.448 -1,-1l-0,-2.993l-1.99,-0l-0,2.99c-0,0.552 -0.448,1 -1,1c-0.552,-0 -1,-0.448 -1,-1l-0,-2.99l-1.991,-0l0,2.99c0,0.552 -0.448,1 -1,1c-0.552,-0 -1,-0.448 -1,-1l0,-2.99Z" />
-  </svg>
+const DAY = 24 * 60 * 60 * 1000;
+const HISTORY_DAYS = 90; // histórico de ações (alimenta ficha do cliente e risco)
+const SENT_TTL = 12 * 60 * 60 * 1000; // selo "Enviado" dura 12h
+
+const NAV: { id: Page; label: string; icon: typeof Send }[] = [
+  { id: 'dashboard', label: 'Painel', icon: LayoutDashboard },
+  { id: 'billing', label: 'Cobranças', icon: Send },
+  { id: 'clients', label: 'Clientes', icon: Users },
+  { id: 'history', label: 'Histórico', icon: HistoryIcon },
+  { id: 'settings', label: 'Configurações', icon: SettingsIcon },
+];
+
+const TOAST_STYLE: Record<ToastMessage['type'], { bar: string; icon: typeof Info }> = {
+  success: { bar: 'bg-ok', icon: CheckCircle2 },
+  error: { bar: 'bg-danger', icon: XCircle },
+  warning: { bar: 'bg-warn', icon: AlertTriangle },
+  info: { bar: 'bg-brand', icon: Info },
+};
+
+// Config salva em versões antigas -> formato atual
+const loadConfig = (): AppConfig => {
+  const parsed = loadJSON<any>('cobrancaConfig', null);
+  if (!parsed || !parsed.templates) return DEFAULT_CONFIG;
+
+  // Converte o antigo objeto "prices" para a lista "plans"
+  if (parsed.prices && (!parsed.plans || parsed.plans.length === 0)) {
+    parsed.plans = [
+      { id: 'm1', label: '1 Mês', price: parsed.prices.month1 || 35 },
+      { id: 'm2', label: '2 Meses', price: parsed.prices.month2 || 70 },
+      { id: 'm3', label: '3 Meses', price: parsed.prices.month3 || 105 },
+      { id: 'm6', label: '6 Meses', price: parsed.prices.month6 || 210 },
+    ];
+    if (parsed.templates.normal.includes('{plano1}')) parsed.templates.normal = DEFAULT_CONFIG.templates.normal;
+    if (parsed.templates.expired.includes('{plano1}')) parsed.templates.expired = DEFAULT_CONFIG.templates.expired;
+    delete parsed.prices;
+  }
+
+  // Planos de 4 e 5 meses para quem já usava o app
+  if (parsed.plans) {
+    if (!parsed.plans.some((p: any) => p.label.includes('4 Meses'))) parsed.plans.push({ id: 'p4', label: '4 Meses', price: 140 });
+    if (!parsed.plans.some((p: any) => p.label.includes('5 Meses'))) parsed.plans.push({ id: 'p5', label: '5 Meses', price: 175 });
+    parsed.plans.sort((a: any, b: any) => a.price - b.price);
+  }
+
+  if (!parsed.planGroups || parsed.planGroups.length === 0) {
+    parsed.planGroups = [
+      { id: 'default', label: '1 Tela (Padrão)', plans: parsed.plans || DEFAULT_CONFIG.plans },
+      ...DEFAULT_CONFIG.planGroups.slice(1),
+    ];
+  }
+
+  if (!parsed.tags) parsed.tags = DEFAULT_CONFIG.tags;
+  if (!parsed.templates.receipt) parsed.templates.receipt = DEFAULT_CONFIG.templates.receipt;
+  if (!parsed.priceLineFormat) parsed.priceLineFormat = DEFAULT_CONFIG.priceLineFormat;
+  if (!parsed.plansTitle) parsed.plansTitle = DEFAULT_CONFIG.plansTitle;
+
+  // Recursos removidos
+  delete parsed.quickMessages;
+  delete parsed.quickLinks;
+  delete parsed.antiBanMode;
+  delete parsed.pixName;
+  delete parsed.pixCity;
+  delete parsed.pixSeparate;
+  return parsed;
+};
+
+const BrandMark = ({ size = 32 }: { size?: number }) => (
+  <span className="rounded-md bg-brand text-white flex items-center justify-center flex-shrink-0" style={{ width: size, height: size }}>
+    <Send size={size * 0.5} />
+  </span>
 );
 
 function App() {
-  // --- Theme State ---
-  const [isDarkMode, setIsDarkMode] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('themeElite');
-      return saved ? saved === 'dark' : true;
+  // --- Tema e navegação ---
+  const [isDarkMode, setIsDarkMode] = useState(() => localStorage.getItem('themeElite') === 'dark');
+  // ?p=billing vem do toque na notificação diária
+  const [page, setPage] = useState<Page>(() => {
+    const fromUrl = new URLSearchParams(window.location.search).get('p') as Page | null;
+    if (fromUrl && NAV.some(n => n.id === fromUrl)) {
+      window.history.replaceState(null, '', '/');
+      return fromUrl;
     }
-    return true;
+    return (localStorage.getItem('uiPage') as Page) || 'dashboard';
   });
-
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
-  // --- Configuration State (With Migration Logic) ---
-  const [config, setConfig] = useState<AppConfig>(() => {
-    const parsed = loadJSON<any>('cobrancaConfig', null);
-    if (parsed && parsed.templates) {
-        
-        // MIGRATION: Convert old "prices" object to "plans" array if needed
-        if (parsed.prices && (!parsed.plans || parsed.plans.length === 0)) {
-            parsed.plans = [
-                { id: 'm1', label: '1 Mês', price: parsed.prices.month1 || 35 },
-                { id: 'm2', label: '2 Meses', price: parsed.prices.month2 || 70 },
-                { id: 'm3', label: '3 Meses', price: parsed.prices.month3 || 105 },
-                { id: 'm6', label: '6 Meses', price: parsed.prices.month6 || 210 },
-            ];
-            // Update default templates to use new variable if they are still using the old ones
-            if (parsed.templates.normal.includes('{plano1}')) {
-                parsed.templates.normal = DEFAULT_CONFIG.templates.normal;
-            }
-            if (parsed.templates.expired.includes('{plano1}')) {
-                parsed.templates.expired = DEFAULT_CONFIG.templates.expired;
-            }
-            delete parsed.prices;
-        }
+  const [config, setConfig] = useState<AppConfig>(loadConfig);
 
-        // UPDATE: Check for missing 4 and 5 months plans (for existing users)
-        if (parsed.plans) {
-            const hasP4 = parsed.plans.some((p: any) => p.label.includes('4 Meses'));
-            const hasP5 = parsed.plans.some((p: any) => p.label.includes('5 Meses'));
-            
-            if (!hasP4) {
-                 parsed.plans.push({ id: 'p4', label: '4 Meses', price: 140 });
-                 parsed.plans.sort((a: any, b: any) => a.price - b.price);
-            }
-            if (!hasP5) {
-                 parsed.plans.push({ id: 'p5', label: '5 Meses', price: 175 });
-                 parsed.plans.sort((a: any, b: any) => a.price - b.price);
-            }
-        }
-        
-        // UPDATE: Initialize planGroups if missing
-        if (!parsed.planGroups || parsed.planGroups.length === 0) {
-            // Create default group from existing plans
-            parsed.planGroups = [
-                {
-                    id: 'default',
-                    label: '1 Tela (Padrão)',
-                    plans: parsed.plans || DEFAULT_CONFIG.plans
-                },
-                ...DEFAULT_CONFIG.planGroups.slice(1) // Add 2 and 3 screens examples
-            ];
-        }
+  // --- Dados ---
+  const [inputData, setInputData] = useState(() => localStorage.getItem('lastInputData') || '');
+  const [customNotes, setCustomNotes] = useState<Record<string, string>>(() => loadJSON('customNotes', {}));
+  const [customMessages, setCustomMessages] = useState<Record<string, string>>(() => loadJSON('customMessages', {}));
+  const [phoneOverrides, setPhoneOverrides] = useState<Record<string, string>>(() => loadJSON('phoneOverrides', {}));
+  const [pixOverrides, setPixOverrides] = useState<Record<string, string>>(() => loadJSON('pixOverrides', {}));
+  const [clientTags, setClientTags] = useState<Record<string, string[]>>(() => loadJSON('clientTags', {}));
+  // Titular -> nomes dos dependentes
+  const [clientLinks, setClientLinks] = useState<Record<string, string[]>>(() => loadJSON('clientLinks', {}));
+  const [clientDatabase, setClientDatabase] = useState<StoredClient[]>(() => loadJSON('clientDatabase', []));
+  const [payments, setPayments] = useState<PaymentRecord[]>(() => loadJSON('payments', []));
 
-        // Ensure new fields exist
-        if (!parsed.tags) parsed.tags = DEFAULT_CONFIG.tags;
-        if (!parsed.templates.receipt) parsed.templates.receipt = DEFAULT_CONFIG.templates.receipt;
-        if (!parsed.quickLinks) parsed.quickLinks = DEFAULT_CONFIG.quickLinks;
-        if (!parsed.priceLineFormat) parsed.priceLineFormat = DEFAULT_CONFIG.priceLineFormat;
-        if (!parsed.plansTitle) parsed.plansTitle = DEFAULT_CONFIG.plansTitle;
-
-        // Cleanup deprecated quickMessages if they exist
-        if (parsed.quickMessages) delete parsed.quickMessages;
-
-        return parsed;
-    }
-    return DEFAULT_CONFIG;
+  // Enviados nas últimas 12h (o selo "Enviado" sobrevive a recarregar a página)
+  const [sentClients, setSentClients] = useState<Record<string, number>>(() => {
+    const parsed = loadJSON<Record<string, unknown>>('sentClientsHistory', {});
+    const now = Date.now();
+    return Object.fromEntries(Object.entries(parsed).filter(([, ts]) => typeof ts === 'number' && now - ts < SENT_TTL)) as Record<string, number>;
   });
 
-  // --- Data State ---
-  const [inputData, setInputData] = useState(() => localStorage.getItem('lastInputData') || '');
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  
-  const [customNotes, setCustomNotes] = useState<Record<string, string>>(() => loadJSON('customNotes', {}));
+  const [actionHistory, setActionHistory] = useState<ActionLog[]>(() =>
+    loadJSON<ActionLog[]>('actionHistory', []).filter(log => Date.now() - log.timestamp < HISTORY_DAYS * DAY),
+  );
 
-  const [customMessages, setCustomMessages] = useState<Record<string, string>>(() => loadJSON('customMessages', {}));
+  const [reminders, setReminders] = useState<Reminder[]>(() =>
+    loadJSON<Reminder[]>('reminders', []).filter(r => !r.fired || Date.now() - r.scheduledFor < DAY),
+  );
 
-  const [phoneOverrides, setPhoneOverrides] = useState<Record<string, string>>(() => loadJSON('phoneOverrides', {}));
-
-  const [pixOverrides, setPixOverrides] = useState<Record<string, string>>(() => loadJSON('pixOverrides', {}));
-
-  const [clientTags, setClientTags] = useState<Record<string, string[]>>(() => loadJSON('clientTags', {}));
-
-  // Mapping: MasterName -> Array of DependentNames
-  const [clientLinks, setClientLinks] = useState<Record<string, string[]>>(() => loadJSON('clientLinks', {}));
-
-  // --- View State ---
-  const [viewMode, setViewMode] = useState<ViewMode>('input');
-  const [resultViewMode, setResultViewMode] = useState<ResultViewMode>('grid');
-  const [results, setResults] = useState<ParsedClient[]>([]); // Structured results (grouped)
-  const [flatResults, setFlatResults] = useState<ParsedClient[]>([]); // All clients flat list
+  // --- Resultados e filtros da página Cobranças ---
+  const [results, setResults] = useState<ParsedClient[]>([]); // agrupados (titular + vinculados)
+  const [flatResults, setFlatResults] = useState<ParsedClient[]>([]); // todos, sem agrupar
   const [resultTitle, setResultTitle] = useState('');
   const [isExpiredMode, setIsExpiredMode] = useState(false);
-  
-  // --- Smart Persistence for Sent Clients ---
-  const [sentClients, setSentClients] = useState<Record<string, number>>(() => {
-    try {
-        const saved = localStorage.getItem('sentClientsHistory');
-        if (!saved) return {};
-        const parsed = JSON.parse(saved);
-        const now = Date.now();
-        const eighteenHours = 18 * 60 * 60 * 1000;
-        
-        const cleaned: Record<string, number> = {};
-        Object.entries(parsed).forEach(([id, timestamp]) => {
-            if (typeof timestamp === 'number' && (now - timestamp) < eighteenHours) {
-                cleaned[id] = timestamp;
-            }
-        });
-        return cleaned;
-    } catch (e) { return {}; }
-  });
+  const [resultViewMode, setResultViewMode] = useState<ResultViewMode>('grid');
+  const [period, setPeriod] = useState<PeriodPreset | null>(null);
+  const [lastRange, setLastRange] = useState<DateRange>({ start: '', end: '' });
+  const [customDates, setCustomDates] = useState<DateRange>(() => ({
+    start: localStorage.getItem('unifiedStart') || '',
+    end: localStorage.getItem('unifiedEnd') || '',
+  }));
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [tagFilter, setTagFilter] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
 
-  // --- Action History Log (New Feature) ---
-  const [actionHistory, setActionHistory] = useState<ActionLog[]>(() => {
-      try {
-          const saved = localStorage.getItem('actionHistory');
-          if (!saved) return [];
-          const parsed: ActionLog[] = JSON.parse(saved);
-          // Filter logs from today only
-          const today = new Date().toDateString();
-          return parsed.filter(log => new Date(log.timestamp).toDateString() === today);
-      } catch (e) { return []; }
-  });
-  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
-  const [isLinksOpen, setIsLinksOpen] = useState(false);
-
-  // --- Feature: Banco de Clientes ---
-  const [clientDatabase, setClientDatabase] = useState<StoredClient[]>(() => {
-    try {
-      const saved = localStorage.getItem('clientDatabase');
-      return saved ? JSON.parse(saved) : [];
-    } catch { return []; }
-  });
-  const [isDatabaseOpen, setIsDatabaseOpen] = useState(false);
-
-  // --- Feature: Lembretes ---
-  const [reminders, setReminders] = useState<Reminder[]>(() => {
-    try {
-      const saved = localStorage.getItem('reminders');
-      if (!saved) return [];
-      const parsed: Reminder[] = JSON.parse(saved);
-      return parsed.filter(r => !r.fired || Date.now() - r.scheduledFor < 24 * 60 * 60 * 1000);
-    } catch { return []; }
-  });
+  // --- UI ---
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  const [isImportOpen, setIsImportOpen] = useState(false);
+  const [editingClient, setEditingClient] = useState<ParsedClient | null>(null);
+  const [payingClient, setPayingClient] = useState<ParsedClient | null>(null);
+  const [profileName, setProfileName] = useState<string | null>(null);
+  const [clientsFilter, setClientsFilter] = useState<'all' | 'overdue' | 'upcoming' | 'active' | 'risk'>('all');
+  const [linkingClient, setLinkingClient] = useState<ParsedClient | null>(null);
   const [reminderClient, setReminderClient] = useState<ParsedClient | null>(null);
 
-  // --- Filter Inputs ---
-  const [unifiedDates, setUnifiedDates] = useState<DateRange>(() => ({
-    start: localStorage.getItem('unifiedStart') || '',
-    end: localStorage.getItem('unifiedEnd') || ''
-  }));
-  const [expiredDates, setExpiredDates] = useState<DateRange>({ start: '', end: '' });
-  
-  // --- UI State ---
-  const [searchQuery, setSearchQuery] = useState('');
-  const [toasts, setToasts] = useState<ToastMessage[]>([]);
-  const [isConfigOpen, setIsConfigOpen] = useState(false);
-  const [editingClient, setEditingClient] = useState<ParsedClient | null>(null);
-  const [receiptClient, setReceiptClient] = useState<ParsedClient | null>(null);
-  const [linkingClient, setLinkingClient] = useState<ParsedClient | null>(null); // For Linking Modal
-
-  // --- Focus Mode & Queue State ---
+  // --- Modo Foco / Fila ---
+  const [focusIds, setFocusIds] = useState<string[]>([]);
   const [focusIndex, setFocusIndex] = useState(0);
   const [isQueueMode, setIsQueueMode] = useState(false);
+  const [invalidClients, setInvalidClients] = useState<{ name: string; phone: string; reason: string }[]>([]);
+  const [showInvalidReport, setShowInvalidReport] = useState(false);
 
-  // --- Weekday Rules State ---
-  // Recalcula uma vez por minuto (caso usuário deixe a aba aberta passando da meia-noite)
+  // Recalcula a regra de sexta uma vez por minuto (aba aberta passando da meia-noite)
   const [weekday, setWeekday] = useState(() => getWeekdayContext());
   useEffect(() => {
     const interval = setInterval(() => setWeekday(getWeekdayContext()), 60_000);
     return () => clearInterval(interval);
   }, []);
 
-  // --- Invalid Phones Report (preenchido durante o modo Fila) ---
-  const [invalidClients, setInvalidClients] = useState<{ name: string; phone: string; reason: string }[]>([]);
-  const [showInvalidReport, setShowInvalidReport] = useState(false);
-
-  // Ref de input de arquivo (upload CSV/TXT)
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // --- Effects ---
+  // --- Persistência ---
   useEffect(() => {
     document.documentElement.classList.toggle('dark', isDarkMode);
     saveItem('themeElite', isDarkMode ? 'dark' : 'light');
   }, [isDarkMode]);
+  useEffect(() => { saveItem('uiPage', page); }, [page]);
+  useEffect(() => { saveItem('cobrancaConfig', JSON.stringify(config)); }, [config]);
+  useEffect(() => { saveItem('lastInputData', inputData); }, [inputData]);
+  useEffect(() => { saveItem('customNotes', JSON.stringify(customNotes)); }, [customNotes]);
+  useEffect(() => { saveItem('customMessages', JSON.stringify(customMessages)); }, [customMessages]);
+  useEffect(() => { saveItem('phoneOverrides', JSON.stringify(phoneOverrides)); }, [phoneOverrides]);
+  useEffect(() => { saveItem('pixOverrides', JSON.stringify(pixOverrides)); }, [pixOverrides]);
+  useEffect(() => { saveItem('clientTags', JSON.stringify(clientTags)); }, [clientTags]);
+  useEffect(() => { saveItem('clientLinks', JSON.stringify(clientLinks)); }, [clientLinks]);
+  useEffect(() => { saveItem('unifiedStart', customDates.start); saveItem('unifiedEnd', customDates.end); }, [customDates]);
+  useEffect(() => { saveItem('sentClientsHistory', JSON.stringify(sentClients)); }, [sentClients]);
+  useEffect(() => { saveItem('actionHistory', JSON.stringify(actionHistory)); }, [actionHistory]);
+  useEffect(() => { saveItem('clientDatabase', JSON.stringify(clientDatabase)); }, [clientDatabase]);
+  useEffect(() => { saveItem('reminders', JSON.stringify(reminders)); }, [reminders]);
+  useEffect(() => { saveItem('payments', JSON.stringify(payments)); }, [payments]);
 
-  useEffect(() => {
-    saveItem('cobrancaConfig', JSON.stringify(config));
-  }, [config]);
+  const addToast = useCallback((text: string, type: ToastMessage['type'] = 'info') => {
+    const id = Date.now() + Math.random(); // dois toasts no mesmo ms não colidem
+    setToasts(prev => [...prev, { id, text, type }]);
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4000);
+  }, []);
 
-  useEffect(() => {
-    saveItem('lastInputData', inputData);
-  }, [inputData]);
-
-  useEffect(() => {
-    saveItem('customNotes', JSON.stringify(customNotes));
-  }, [customNotes]);
-
-  useEffect(() => {
-    saveItem('customMessages', JSON.stringify(customMessages));
-  }, [customMessages]);
-
-  useEffect(() => {
-    saveItem('phoneOverrides', JSON.stringify(phoneOverrides));
-  }, [phoneOverrides]);
-
-  useEffect(() => {
-    saveItem('pixOverrides', JSON.stringify(pixOverrides));
-  }, [pixOverrides]);
-
-  useEffect(() => {
-    saveItem('clientTags', JSON.stringify(clientTags));
-  }, [clientTags]);
-
-  useEffect(() => {
-    saveItem('clientLinks', JSON.stringify(clientLinks));
-  }, [clientLinks]);
-
-  useEffect(() => {
-    saveItem('unifiedStart', unifiedDates.start);
-    saveItem('unifiedEnd', unifiedDates.end);
-  }, [unifiedDates]);
-
-  useEffect(() => {
-    saveItem('sentClientsHistory', JSON.stringify(sentClients));
-  }, [sentClients]);
-
-  useEffect(() => {
-    saveItem('actionHistory', JSON.stringify(actionHistory));
-  }, [actionHistory]);
-
-  useEffect(() => {
-    saveItem('clientDatabase', JSON.stringify(clientDatabase));
-  }, [clientDatabase]);
-
-  useEffect(() => {
-    saveItem('reminders', JSON.stringify(reminders));
-  }, [reminders]);
-
-  // Dispara lembretes pendentes ao carregar e agenda os futuros da sessão
-  useEffect(() => {
-    const now = Date.now();
-    const pending = reminders.filter(r => !r.fired);
-    pending.forEach(r => {
-      const delay = r.scheduledFor - now;
-      if (delay <= 0) {
-        addToast(`⏰ Lembrete: ${r.clientName}`, 'warning');
-        setReminders(prev => prev.map(x => x.id === r.id ? { ...x, fired: true } : x));
-      } else if (delay < 24 * 60 * 60 * 1000) {
-        setTimeout(() => {
-          addToast(`⏰ Lembrete: ${r.clientName}`, 'warning');
-          if ('Notification' in window && Notification.permission === 'granted') {
-            new Notification('TVBR.Cob', { body: `Hora de cobrar: ${r.clientName}`, icon: '/favicon.ico' });
-          }
-          setReminders(prev => prev.map(x => x.id === r.id ? { ...x, fired: true } : x));
-        }, delay);
+  // --- Lembretes: dispara os vencidos ao abrir e agenda os das próximas 24h ---
+  const scheduleReminder = useCallback((r: Reminder) => {
+    const fire = () => {
+      addToast(`Lembrete: cobrar ${r.clientName}`, 'warning');
+      if ('Notification' in window && Notification.permission === 'granted') {
+        new Notification('TVBR.Cob', { body: `Hora de cobrar: ${r.clientName}`, icon: '/icons/icon-192.png' });
       }
-    });
+      setReminders(prev => prev.map(x => (x.id === r.id ? { ...x, fired: true } : x)));
+    };
+    const delay = r.scheduledFor - Date.now();
+    if (delay <= 0) fire();
+    else if (delay < DAY) setTimeout(fire, delay);
+  }, [addToast]);
+
+  useEffect(() => {
+    reminders.filter(r => !r.fired).forEach(scheduleReminder);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // --- Sincronização na nuvem ---
-  // Ao abrir e ao voltar para a aba: envia alterações pendentes ou baixa se outro aparelho salvou depois
+  // --- Resumo do dia: aparece na 1ª abertura de cada dia (o push das 8h cobre o app fechado) ---
+  const [dailyBanner, setDailyBanner] = useState<DailySummary | null>(null);
+  useEffect(() => {
+    void registerServiceWorker();
+    const check = () => {
+      const today = toInputDate(new Date());
+      if (localStorage.getItem('dailyNoticeDate') === today) return;
+      if (!notifySettings(loadJSON<AppConfig | undefined>('cobrancaConfig', undefined)).banner) return;
+      const db = loadJSON<StoredClient[]>('clientDatabase', []);
+      if (db.length) setDailyBanner(dailySummary(db));
+    };
+    check();
+    const onVisible = () => { if (document.visibilityState === 'visible') check(); }; // app aberto virando o dia
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, []);
+  const dismissDaily = () => {
+    saveItem('dailyNoticeDate', toInputDate(new Date()));
+    setDailyBanner(null);
+  };
+
+  // --- Sincronização: ao abrir e ao voltar para a aba ---
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('off');
   useEffect(() => {
     const unsubscribe = onSyncStatus(setSyncStatus);
@@ -311,271 +267,264 @@ function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // --- Helpers ---
-  const addToast = (text: string, type: ToastMessage['type'] = 'info') => {
-    const id = Date.now() + Math.random(); // dois toasts no mesmo ms não colidem
-    setToasts(prev => [...prev, { id, text, type }]);
-    setTimeout(() => {
-      setToasts(prev => prev.filter(t => t.id !== id));
-    }, 4000);
-  };
+  const copyToClipboard = useCallback((text: string) => {
+    navigator.clipboard.writeText(text).then(() => addToast('Copiado!', 'success')).catch(() => addToast('Erro ao copiar.', 'error'));
+  }, [addToast]);
 
   // Anexa ao final do campo; a linha em branco separa blocos (zera a seção IPTV/P2P)
-  const appendInput = (text: string) => {
-    setInputData(prev => {
-      const cleanPrev = (prev || '').trim();
-      return cleanPrev ? `${cleanPrev}\n\n${text}` : text;
+  const appendInput = (text: string) => setInputData(prev => (prev.trim() ? `${prev.trim()}\n\n${text}` : text));
+
+  const goto = (p: Page) => { setPage(p); setIsSidebarOpen(false); };
+
+  // --- Banco de clientes: novos entram, existentes são atualizados ---
+  // Mantém o vencimento mais novo: um pagamento registrado aqui não é desfeito por uma lista antiga.
+  const saveToDatabase = (parsed: ParsedClient[]) => {
+    setClientDatabase(prev => {
+      const byName = new Map(parsed.map(c => [c.name.toLowerCase(), c]));
+      const existing = new Set(prev.map(c => c.name.toLowerCase()));
+      const updated = prev.map(stored => {
+        const match = byName.get(stored.name.toLowerCase());
+        if (!match) return stored;
+        const due = match.dueDate.getTime() > new Date(stored.dueDate).getTime() ? match.dueDate.toISOString() : stored.dueDate;
+        return { ...stored, dueDate: due, rawNotes: match.rawNotes, originalLine: match.originalLine || stored.originalLine || '', type: match.type, savedAt: Date.now() };
+      });
+      const added: StoredClient[] = parsed
+        .filter(c => !existing.has(c.name.toLowerCase()))
+        .map(c => ({ id: crypto.randomUUID(), name: c.name, dueDate: c.dueDate.toISOString(), rawNotes: c.rawNotes, originalLine: c.originalLine || '', type: c.type, savedAt: Date.now() }));
+      return [...updated, ...added];
     });
   };
 
-  const handlePasteInput = async () => {
-    try {
-      const raw = await navigator.clipboard.readText();
-      if (!raw) {
-          addToast('Área de transferência vazia.', 'warning');
-          return;
-      }
-      // Normaliza CSV automaticamente caso o AdminX exporte nesse formato
-      appendInput(normalizeCsvIfNeeded(raw));
-      addToast('Dados adicionados ao final da lista!', 'success');
-    } catch (err) {
-      if (textareaRef.current) {
-          textareaRef.current.focus();
-          const len = textareaRef.current.value.length;
-          textareaRef.current.setSelectionRange(len, len);
-      }
-      addToast('Use Ctrl+V para colar (Permissão do navegador necessária).', 'info');
-    }
-  };
-
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    try {
-      const bytes = new Uint8Array(await file.arrayBuffer());
-      // .xlsx é um ZIP (começa com "PK"): não é texto
-      if (bytes[0] === 0x50 && bytes[1] === 0x4b) {
-        addToast('Planilha do Excel (.xlsx) não é suportada. Exporte/salve como CSV.', 'error');
-        return;
-      }
-      let raw = new TextDecoder('utf-8').decode(bytes);
-      // CSV salvo pelo Excel no Windows vem em Latin-1: UTF-8 inválido vira U+FFFD
-      if (raw.includes(String.fromCharCode(0xfffd))) raw = new TextDecoder('windows-1252').decode(bytes);
-      if (raw.includes('\u0000')) {
-        addToast('Arquivo não parece ser texto/CSV.', 'error');
-        return;
-      }
-      const text = normalizeCsvIfNeeded(raw);
-      if (!text.trim()) {
-        addToast(`"${file.name}" está vazio.`, 'warning');
-        return;
-      }
-      appendInput(text);
-      addToast(`Arquivo "${file.name}" carregado.`, 'success');
-    } catch {
-      addToast('Falha ao ler o arquivo.', 'error');
-    } finally {
-      // Permite recarregar o mesmo arquivo se o usuário quiser
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    }
-  };
-
-  const processData = useCallback((range: DateRange, isVencidoFilter: boolean, forceLinks?: Record<string, string[]>) => {
+  // --- Processamento da lista para um intervalo de datas ---
+  const processData = useCallback((range: DateRange, isVencidoFilter: boolean, forceLinks?: Record<string, string[]>): boolean => {
     if (!inputData.trim()) {
-      addToast('Por favor, insira dados no campo de texto.', 'warning');
-      return;
+      addToast('Importe a lista do painel primeiro.', 'warning');
+      setIsImportOpen(true);
+      return false;
     }
     if (!range.start || !range.end) {
       addToast('Selecione as datas de início e fim.', 'warning');
-      return;
+      return false;
     }
-
-    const start = new Date(range.start + "T00:00:00");
-    const end = new Date(range.end + "T23:59:59");
-
+    const start = new Date(range.start + 'T00:00:00');
+    const end = new Date(range.end + 'T23:59:59');
     if (start > end) {
       addToast('Data de início maior que data fim.', 'error');
-      return;
+      return false;
     }
 
     // Ctrl+V direto no campo não passa pelo botão Colar: normaliza aqui também
     const normalizedInput = normalizeCsvIfNeeded(inputData);
-    const isLikelyP2P = detectInputType(normalizedInput);
-    const { parsedEntries } = parseClientData(normalizedInput, isLikelyP2P);
-    
-    // 1. First Pass: Apply overrides and basic formatting
-    const preparedClients = parsedEntries.filter(entry => {
-      const entryDate = new Date(entry.dueDate);
-      entryDate.setHours(0,0,0,0);
-      const s = new Date(start); s.setHours(0,0,0,0);
-      const e = new Date(end); e.setHours(0,0,0,0);
-      return entryDate >= s && entryDate <= e;
-    }).map(entry => {
-      let rawNotes = entry.rawNotes;
-      if (phoneOverrides[entry.name]) {
-         const { cleanText } = extractPhone(entry.rawNotes);
-         rawNotes = `${phoneOverrides[entry.name]} ${cleanText}`.trim();
-      }
-      return {
-        ...entry,
-        rawNotes: rawNotes,
-        customNotes: customNotes[entry.name] || '',
-        customMessage: customMessages[entry.name] || '',
-        customPix: pixOverrides[entry.name] || '',
-        tags: clientTags[entry.name] || [],
-        linked: [] as ParsedClient[]
-      };
-    });
+    const { parsedEntries } = parseClientData(normalizedInput, detectInputType(normalizedInput));
+    const s = new Date(start); s.setHours(0, 0, 0, 0);
+    const e = new Date(end); e.setHours(0, 0, 0, 0);
 
-    if (preparedClients.length === 0) {
-      addToast(`Nenhum resultado no período. (Lidos: ${parsedEntries.length})`, 'info');
-      return;
+    const prepared: ParsedClient[] = parsedEntries
+      .filter(entry => {
+        const d = new Date(entry.dueDate); d.setHours(0, 0, 0, 0);
+        return d >= s && d <= e;
+      })
+      .map(entry => {
+        let rawNotes = entry.rawNotes;
+        if (phoneOverrides[entry.name]) rawNotes = `${phoneOverrides[entry.name]} ${extractPhone(entry.rawNotes).cleanText}`.trim();
+        return {
+          ...entry,
+          rawNotes,
+          customNotes: customNotes[entry.name] || '',
+          customMessage: customMessages[entry.name] || '',
+          customPix: pixOverrides[entry.name] || '',
+          tags: clientTags[entry.name] || [],
+          linked: [] as ParsedClient[],
+        };
+      });
+
+    // Salva tudo que foi lido no banco, mesmo fora do período
+    saveToDatabase(parsedEntries);
+
+    if (prepared.length === 0) {
+      addToast(`Nenhum cliente no período. (Lidos: ${parsedEntries.length})`, 'info');
     }
 
-    // 2. Second Pass: Group Clients based on Links
-    const linksToUse = forceLinks || clientLinks;
-    const clientMap = new Map<string, ParsedClient>();
-    preparedClients.forEach(c => clientMap.set(c.name, c));
-
-    // Identify which clients are dependents (to hide them later)
-    const dependentNames = new Set<string>();
-
-    Object.entries(linksToUse).forEach(([masterName, dependents]) => {
-        const master = clientMap.get(masterName);
-        if (master) {
-            (dependents as string[]).forEach(depName => {
-                const dep = clientMap.get(depName);
-                if (dep) {
-                    master.linked = [...(master.linked || []), dep];
-                    dependentNames.add(depName);
-                }
-            });
-        }
+    // Agrupa dependentes dentro do titular
+    const byName = new Map(prepared.map(c => [c.name, c]));
+    const dependents = new Set<string>();
+    Object.entries(forceLinks || clientLinks).forEach(([master, deps]) => {
+      const m = byName.get(master);
+      if (!m) return;
+      (deps as string[]).forEach(depName => {
+        const dep = byName.get(depName);
+        if (dep) { m.linked = [...(m.linked || []), dep]; dependents.add(depName); }
+      });
     });
 
-    // Filter out dependents from the main list
-    const groupedClients = preparedClients.filter(c => !dependentNames.has(c.name));
-
-    setFlatResults(preparedClients);
-    setResults(groupedClients);
-    saveToDatabase(preparedClients);
+    setFlatResults(prepared);
+    setResults(prepared.filter(c => !dependents.has(c.name)));
     setIsExpiredMode(isVencidoFilter);
-    const types = new Set(preparedClients.map(c => c.type));
+    setLastRange(range);
+    const types = new Set(prepared.map(c => c.type));
     const typeLabel = types.size > 1 ? 'IPTV + P2P' : types.has('p2p') ? 'P2P' : 'IPTV';
-    const modeLabel = isVencidoFilter ? 'Vencidos' : typeLabel;
-    setResultTitle(`${modeLabel} (${formatDateShort(start)} - ${formatDateShort(end)})`);
-    setViewMode('results');
-    setResultViewMode('grid'); // Reset to grid view
-    setSearchQuery('');
-  }, [inputData, phoneOverrides, pixOverrides, customNotes, customMessages, clientTags, clientLinks]);
+    setResultTitle(`${isVencidoFilter ? 'Vencidos' : typeLabel} · ${formatDateShort(start)} – ${formatDateShort(end)}`);
+    return true;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inputData, phoneOverrides, pixOverrides, customNotes, customMessages, clientTags, clientLinks, addToast]);
 
-  const handleFilterUpcoming = () => {
-    const range = getUpcomingRange();
-    const startStr = toInputDate(range.start);
-    const endStr = toInputDate(range.end);
-    setUnifiedDates({ start: startStr, end: endStr });
-    processData({ start: startStr, end: endStr }, false);
-
-    if (weekday.mode === 'friday_double') {
-      addToast('Sexta-feira: filtrando amanhã + depois de amanhã.', 'info');
-    } else {
-      addToast('Filtrando vencimentos de amanhã.', 'info');
+  // Intervalo de cada atalho de período
+  const rangeFor = (p: PeriodPreset): { range: DateRange; expired: boolean } => {
+    const today = new Date();
+    const plus = (n: number) => { const d = new Date(today); d.setDate(d.getDate() + n); return toInputDate(d); };
+    switch (p) {
+      case 'today': return { range: { start: plus(0), end: plus(0) }, expired: false };
+      case 'tomorrow': {
+        const r = getUpcomingRange(); // sexta: amanhã + depois de amanhã
+        return { range: { start: toInputDate(r.start), end: toInputDate(r.end) }, expired: false };
+      }
+      case 'overdue': return { range: { start: plus(-5), end: plus(-4) }, expired: true };
+      case 'week': return { range: { start: plus(0), end: plus(6) }, expired: false };
+      case 'custom': return { range: customDates, expired: !!customDates.end && customDates.end < plus(0) };
     }
   };
 
-  const handleFilterExpiredRecent = () => {
-    const today = new Date();
-    const fourDaysAgo = new Date(today);
-    fourDaysAgo.setDate(today.getDate() - 4);
-    const fiveDaysAgo = new Date(today);
-    fiveDaysAgo.setDate(today.getDate() - 5);
-
-    const startStr = toInputDate(fiveDaysAgo);
-    const endStr = toInputDate(fourDaysAgo);
-
-    setExpiredDates({ start: startStr, end: endStr });
-    processData({ start: startStr, end: endStr }, true);
+  const runPeriod = (p: PeriodPreset, opts: { navigate?: boolean } = {}) => {
+    setPeriod(p);
+    if (opts.navigate) goto('billing');
+    if (p === 'custom' && (!customDates.start || !customDates.end)) return; // espera o usuário escolher as datas
+    const { range, expired } = rangeFor(p);
+    processData(range, expired);
   };
+
+  const handleProcessFromImport = () => {
+    setIsImportOpen(false);
+    runPeriod(period || 'tomorrow', { navigate: true });
+  };
+
+  // Selo "Enviado" expira em 12h mesmo com o app aberto
+  const isSent = useCallback((id: string) => !!sentClients[id] && Date.now() - sentClients[id] < SENT_TTL, [sentClients]);
+
+  // --- Filtros em memória (busca, tipo, etiqueta, status) ---
+  const lastPaid = useMemo(() => lastPaymentByName(payments), [payments]);
+  const isPaid = useCallback((c: ParsedClient) => isRecentlyPaid(lastPaid.get(c.name.toLowerCase())), [lastPaid]);
+
+  const filteredResults = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
+    return results.filter(r => {
+      if (typeFilter !== 'all' && r.type !== typeFilter) return false;
+      if (tagFilter && !(r.tags || []).includes(tagFilter)) return false;
+      if (statusFilter !== 'all') {
+        const paid = isPaid(r);
+        const sent = isSent(r.id);
+        if (statusFilter === 'paid' && !paid) return false;
+        if (statusFilter === 'sent' && (!sent || paid)) return false;
+        if (statusFilter === 'pending' && (sent || paid)) return false;
+      }
+      if (!q) return true;
+      const tagLabels = (r.tags || []).map(id => config.tags?.find(t => t.id === id)?.label.toLowerCase() || '');
+      return r.name.toLowerCase().includes(q)
+        || r.rawNotes.toLowerCase().includes(q)
+        || (r.customNotes || '').toLowerCase().includes(q)
+        || !!r.linked?.some(l => l.name.toLowerCase().includes(q))
+        || tagLabels.some(l => l.includes(q));
+    });
+  }, [results, searchQuery, typeFilter, tagFilter, statusFilter, isSent, isPaid, config.tags]);
+
+  const billingCounts = useMemo(() => {
+    let sent = 0, paid = 0;
+    results.forEach(r => { if (isPaid(r)) paid++; else if (isSent(r.id)) sent++; });
+    return { pending: results.length - sent - paid, sent, paid };
+  }, [results, isSent, isPaid]);
+
+  // --- Foco / Fila: lista congelada ao iniciar (enviar não tira o cliente da fila) ---
+  const resultsById = useMemo(() => new Map(results.map(r => [r.id, r])), [results]);
+  const focusClients = useMemo(() => focusIds.map(id => resultsById.get(id)).filter(Boolean) as ParsedClient[], [focusIds, resultsById]);
+  const safeFocusIndex = Math.min(focusIndex, Math.max(focusClients.length - 1, 0));
+  const focusClient = resultViewMode === 'focus' ? focusClients[safeFocusIndex] : undefined;
+  const isQueueModeRef = useRef(isQueueMode);
+  isQueueModeRef.current = isQueueMode;
+  const focusCountRef = useRef(focusClients.length);
+  focusCountRef.current = focusClients.length;
+
+  const handleMarkAsSent = useCallback((id: string, action: ActionLog['action']) => {
+    const timestamp = Date.now();
+    setSentClients(prev => ({ ...prev, [id]: timestamp }));
+    const client = resultsById.get(id);
+    if (client) {
+      setActionHistory(prev => {
+        // mesma ação no mesmo cliente em 10 min conta uma vez só
+        if (prev.some(p => p.clientId === id && p.action === action && timestamp - p.timestamp < 600_000)) return prev;
+        return [{ clientId: id, clientName: client.name, timestamp, action }, ...prev];
+      });
+    }
+    // Fila: avança sozinho depois de abrir o WhatsApp
+    if (action === 'whatsapp' && isQueueModeRef.current) {
+      setTimeout(() => {
+        if (!isQueueModeRef.current) return;
+        setFocusIndex(i => (i < focusCountRef.current - 1 ? i + 1 : i));
+      }, 1000);
+    }
+  }, [resultsById]);
+
+  const startFocusMode = (enableQueue: boolean) => {
+    if (filteredResults.length === 0) return;
+    const invalids = filteredResults.flatMap(c => {
+      const v = extractPhoneValidated(c.rawNotes);
+      return v.isValid ? [] : [{ name: c.name, phone: v.original || '(sem número)', reason: v.invalidReason || 'inválido' }];
+    });
+    setInvalidClients(invalids);
+    setFocusIds(filteredResults.map(c => c.id));
+    setFocusIndex(0);
+    setResultViewMode('focus');
+    setIsQueueMode(enableQueue);
+    if (invalids.length > 0) addToast(`${invalids.length} cliente(s) com número inválido: veja o relatório ao final.`, 'warning');
+    if (enableQueue) addToast('Fila ativa: o próximo cliente abre sozinho após enviar.', 'success');
+  };
+
+  const stopFocusMode = () => {
+    setResultViewMode('grid');
+    setIsQueueMode(false);
+    if (invalidClients.length > 0) setShowInvalidReport(true);
+  };
+
+  const handleFocusNext = () => {
+    if (safeFocusIndex < focusClients.length - 1) setFocusIndex(safeFocusIndex + 1);
+    else if (isQueueMode) {
+      if (invalidClients.length > 0) setShowInvalidReport(true);
+      setIsQueueMode(false);
+      addToast('Fila concluída.', 'success');
+    }
+  };
+  const handleFocusPrev = () => { if (safeFocusIndex > 0) setFocusIndex(safeFocusIndex - 1); };
+
+  // --- Edição de cliente ---
+  const setOrDelete = <T,>(setter: React.Dispatch<React.SetStateAction<Record<string, T>>>, key: string, value: T | undefined | null) =>
+    setter(prev => {
+      const copy = { ...prev };
+      if (value && (!Array.isArray(value) || value.length > 0)) copy[key] = value; else delete copy[key];
+      return copy;
+    });
 
   const handleEditSave = (updated: ParsedClient) => {
-    // Update both lists
-    setResults(prev => prev.map(c => c.id === updated.id ? updated : c));
-    setFlatResults(prev => prev.map(c => c.id === updated.id ? updated : c));
-    
-    // Notes
-    if (updated.customNotes) {
-      setCustomNotes(prev => ({ ...prev, [updated.name]: updated.customNotes! }));
-    } else {
-      setCustomNotes(prev => { const copy = { ...prev }; delete copy[updated.name]; return copy; });
-    }
-
-    // Messages
-    if (updated.customMessage) {
-      setCustomMessages(prev => ({ ...prev, [updated.name]: updated.customMessage! }));
-    } else {
-      setCustomMessages(prev => { const copy = { ...prev }; delete copy[updated.name]; return copy; });
-    }
-
-    // Phones
+    setResults(prev => prev.map(c => (c.id === updated.id ? updated : c)));
+    setFlatResults(prev => prev.map(c => (c.id === updated.id ? updated : c)));
+    setOrDelete(setCustomNotes, updated.name, updated.customNotes);
+    setOrDelete(setCustomMessages, updated.name, updated.customMessage);
+    setOrDelete(setPixOverrides, updated.name, updated.customPix?.trim()); // vazio = volta à chave das Configurações
+    setOrDelete(setClientTags, updated.name, updated.tags);
     const { original } = extractPhone(updated.rawNotes);
-    if (original) {
-        setPhoneOverrides(prev => ({ ...prev, [updated.name]: original }));
-    }
-
-    // PIX próprio do cliente (vazio = volta a usar o das Configurações)
-    const pix = updated.customPix?.trim();
-    if (pix) {
-      setPixOverrides(prev => ({ ...prev, [updated.name]: pix }));
-    } else {
-      setPixOverrides(prev => { const copy = { ...prev }; delete copy[updated.name]; return copy; });
-    }
-
-    // Tags
-    if (updated.tags && updated.tags.length > 0) {
-        setClientTags(prev => ({ ...prev, [updated.name]: updated.tags! }));
-    } else {
-        setClientTags(prev => { const copy = { ...prev }; delete copy[updated.name]; return copy; });
-    }
-
+    if (original) setPhoneOverrides(prev => ({ ...prev, [updated.name]: original }));
+    // Mantém o banco de clientes em dia (vencimento/notas editados à mão)
+    const oldName = (editingClient?.name || updated.name).toLowerCase();
+    setClientDatabase(prev => prev.map(c => (c.name.toLowerCase() === oldName
+      ? { ...c, name: updated.name, dueDate: updated.dueDate.toISOString(), rawNotes: updated.rawNotes }
+      : c)));
     setEditingClient(null);
     addToast('Cliente atualizado.', 'success');
   };
 
-  const handleSendReceipt = (date: Date, value: number) => {
-    if (!receiptClient) return;
-
-    handleMarkAsSent(receiptClient.id, 'receipt');
-
-    const receiptMsg = (config.templates.receipt || '')
-        .replace(/{nome}/g, receiptClient.name)
-        .replace(/{data_vencimento}/g, formatDate(date))
-        .replace(/{valor}/g, `R$ ${value}`);
-
-    const whatsapp = toWhatsappNumber(extractPhone(receiptClient.rawNotes).whatsapp);
-
-    if (whatsapp) {
-        const url = `https://wa.me/${whatsapp}?text=${encodeURIComponent(receiptMsg)}`;
-        window.open(url, '_blank');
-    } else {
-        copyToClipboard(receiptMsg);
-        addToast('Sem WhatsApp, copiado!', 'warning');
-    }
-  };
-
-  const handleSaveLinks = (master: ParsedClient, selectedDependents: string[]) => {
-      // Update links
-      const newLinks = { ...clientLinks };
-      if (selectedDependents.length === 0) {
-          delete newLinks[master.name];
-      } else {
-          newLinks[master.name] = selectedDependents;
-      }
-      setClientLinks(newLinks);
-
-      // Re-process view
-      const datesToUse = isExpiredMode ? expiredDates : unifiedDates;
-      processData(datesToUse, isExpiredMode, newLinks);
-      addToast('Vínculos salvos!', 'success');
+  const handleSaveLinks = (master: ParsedClient, selected: string[]) => {
+    const newLinks = { ...clientLinks };
+    if (selected.length === 0) delete newLinks[master.name]; else newLinks[master.name] = selected;
+    setClientLinks(newLinks);
+    processData(lastRange, isExpiredMode, newLinks);
+    addToast('Vínculos salvos!', 'success');
   };
 
   // Ao trocar a chave PIX, atualiza também onde a chave antiga ficou escrita
@@ -587,192 +536,56 @@ function App() {
     const t = newConf.templates;
     setConfig({
       ...newConf,
-      templates: {
-        ...t,
-        normal: swap(t.normal),
-        expired: swap(t.expired),
-        receipt: swap(t.receipt),
-        additional: (t.additional || []).map(a => ({ ...a, content: swap(a.content) })),
-      },
+      templates: { ...t, normal: swap(t.normal), expired: swap(t.expired), receipt: swap(t.receipt), additional: (t.additional || []).map(a => ({ ...a, content: swap(a.content) })) },
     });
     setCustomMessages(prev => Object.fromEntries(Object.entries(prev).map(([k, v]) => [k, swap(v as string)])));
-    setIsConfigOpen(false);
-    addToast('Salvo', 'success');
+    addToast('Configurações salvas.', 'success');
   };
 
-  const handleExport = () => {
-    if (results.length === 0) return;
-    const dataToExport = getFilteredResults().map(r => ({
-      name: r.name,
-      date: r.dueDate,
-      notes: extractPhone(r.rawNotes).cleanText,
-      phone: extractPhone(r.rawNotes).original,
-      customNotes: r.customNotes || ''
-    }));
-    const csv = generateCSV(dataToExport, config.defaultTime || '20:00');
-    const blob = new Blob([String.fromCharCode(0xFEFF), csv], { type: 'text/csv;charset=utf-8;' });
-    downloadBlob(blob, `clientes_export_${Date.now()}.csv`);
-    addToast('Arquivo exportado.', 'success');
-  };
+  // --- Pagamentos ---
+  const whatsappOf = (c: ParsedClient) => toWhatsappNumber(extractPhone(phoneOverrides[c.name] || c.rawNotes).whatsapp);
 
-  const copyToClipboard = useCallback((text: string) => {
-    navigator.clipboard.writeText(text).then(() => {
-      addToast('Copiado!', 'success');
-    }).catch(() => addToast('Erro ao copiar.', 'error'));
-  }, []);
+  const handleConfirmPayment = (client: ParsedClient, input: PaymentInput) => {
+    const record: PaymentRecord = {
+      id: crypto.randomUUID(),
+      clientId: client.id,
+      clientName: client.name,
+      amount: input.amount,
+      paidAt: Date.now(),
+      planLabel: input.planLabel,
+      newDueDate: input.newDueDate.toISOString(),
+      prevDueDate: client.dueDate.toISOString(),
+    };
+    setPayments(prev => [record, ...prev]);
+    setClientDatabase(prev => prev.map(c => (c.name.toLowerCase() === client.name.toLowerCase() ? { ...c, dueDate: record.newDueDate, savedAt: Date.now() } : c)));
+    const renew = (list: ParsedClient[]) => list.map(c => (c.id === client.id ? { ...c, dueDate: input.newDueDate } : c));
+    setResults(renew);
+    setFlatResults(renew);
 
-  const handleMarkAsSent = useCallback((id: string, action: 'whatsapp' | 'copy' | 'mark' | 'receipt') => {
-    const timestamp = Date.now();
-    setSentClients(prev => ({ ...prev, [id]: timestamp }));
-    
-    // Log history
-    const client = results.find(r => r.id === id);
-    if (client) {
-        setActionHistory(prev => {
-            // Avoid duplicates within last 10 minutes for same action to prevent spamming log
-            const existing = prev.find(p => p.clientId === id && p.action === action && (timestamp - p.timestamp) < 600000);
-            if (existing) return prev;
-            return [{ clientId: id, clientName: client.name, timestamp, action }, ...prev];
-        });
+    if (input.sendReceipt) {
+      const msg = (config.templates.receipt || '')
+        .replace(/{nome}/g, client.name)
+        .replace(/{data_vencimento}/g, formatDate(input.newDueDate))
+        .replace(/{valor}/g, formatBRL(input.amount));
+      const number = whatsappOf(client);
+      if (number) openExternal(`https://wa.me/${number}?text=${encodeURIComponent(msg)}`);
+      else copyToClipboard(msg);
+      if (resultsById.has(client.id)) handleMarkAsSent(client.id, 'receipt');
     }
-
-    // AUTO-ADVANCE LOGIC (QUEUE MODE) — lê o estado atual via ref, sem updater aninhado
-    if (action === 'whatsapp' && isQueueModeRef.current) {
-        setTimeout(() => {
-            if (!isQueueModeRef.current) return;
-            const total = filteredCountRef.current;
-            setFocusIndex(prevIndex => (prevIndex < total - 1 ? prevIndex + 1 : prevIndex));
-        }, 1000);
-    }
-  }, [results]);
-
-  const getFilteredResults = useCallback(() => {
-    if (!searchQuery) return results;
-    const lower = searchQuery.toLowerCase();
-    
-    // Check tags filter as well
-    return results.filter(r => {
-        const matchesName = r.name.toLowerCase().includes(lower);
-        const matchesNotes = r.rawNotes.toLowerCase().includes(lower);
-        const matchesCustom = (r.customNotes || '').toLowerCase().includes(lower);
-        
-        // Also check inside Linked Clients
-        const matchesLinked = r.linked?.some(l => l.name.toLowerCase().includes(lower));
-        
-        // Allow searching by tag name (e.g. search "vip")
-        const clientTagLabels = (r.tags || []).map(tid => config.tags?.find(t => t.id === tid)?.label.toLowerCase() || '');
-        const matchesTags = clientTagLabels.some(label => label.includes(lower));
-
-        return matchesName || matchesNotes || matchesCustom || matchesTags || matchesLinked;
-    });
-  }, [results, searchQuery, config.tags]);
-
-  const filteredResults = useMemo(() => getFilteredResults(), [getFilteredResults]);
-  const isQueueModeRef = useRef(isQueueMode);
-  isQueueModeRef.current = isQueueMode;
-  const filteredCountRef = useRef(filteredResults.length);
-  filteredCountRef.current = filteredResults.length;
-  // Índice sempre dentro da lista (ela pode encolher durante o modo Foco)
-  const safeFocusIndex = Math.min(focusIndex, Math.max(filteredResults.length - 1, 0));
-  const focusClient = filteredResults[safeFocusIndex];
-
-  const dashboardStats = useMemo(() => {
-    // When calculating stats, we should probably consider linked clients too if we want "Total Accounts"
-    // Or just "Total Paying Clients" (cards). Let's stick to Cards for simplicity, but maybe indicate accounts.
-    // Actually, revenue is per account usually.
-    const currentResults = getFilteredResults();
-    let totalCards = 0;
-    let totalAccounts = 0;
-    
-    const today = new Date();
-    today.setHours(0,0,0,0);
-    
-    let expired = 0;
-    let expiringToday = 0;
-
-    currentResults.forEach(r => {
-        totalCards++;
-        totalAccounts += 1 + (r.linked?.length || 0);
-
-        const d = new Date(r.dueDate);
-        d.setHours(0,0,0,0);
-        if (d < today) expired++;
-        if (d.getTime() === today.getTime()) expiringToday++;
-    });
-
-    const potentialRevenue = totalAccounts * (config.plans?.[0]?.price || 35);
-    return { total: totalCards, expired, today: expiringToday, potentialRevenue };
-  }, [getFilteredResults, config.plans]);
-
-  // --- Focus Mode Logic ---
-  const startFocusMode = (enableQueue = false) => {
-    const filtered = getFilteredResults();
-    if (filtered.length === 0) return;
-
-    // Pré-validação: separa clientes com número inválido
-    const invalids: { name: string; phone: string; reason: string }[] = [];
-    filtered.forEach(c => {
-      const v = extractPhoneValidated(c.rawNotes);
-      if (!v.isValid) {
-        invalids.push({
-          name: c.name,
-          phone: v.original || '(sem número)',
-          reason: v.invalidReason || 'inválido'
-        });
-      }
-    });
-    setInvalidClients(invalids);
-
-    setFocusIndex(0);
-    setResultViewMode('focus');
-    setIsQueueMode(enableQueue);
-
-    if (invalids.length > 0) {
-      addToast(`${invalids.length} cliente(s) com número inválido — verão envio manual no relatório final.`, 'warning');
-    }
-    if (enableQueue) {
-      addToast('Modo Fila Ativo: o próximo cliente abrirá automaticamente após enviar.', 'success');
-    }
+    addToast(`Pagamento de ${formatBRL(input.amount)} registrado · vence ${formatDate(input.newDueDate)}`, 'success');
   };
 
-  const handleFocusNext = () => {
-    if (safeFocusIndex < filteredResults.length - 1) {
-      setFocusIndex(safeFocusIndex + 1);
-    } else if (isQueueMode) {
-      if (invalidClients.length > 0) setShowInvalidReport(true);
-      setIsQueueMode(false);
-      addToast('Fila concluída.', 'success');
-    }
+  // --- Lembretes ---
+  const handleAddReminder = (client: ParsedClient, scheduledFor: number) => {
+    const reminder: Reminder = { id: crypto.randomUUID(), clientId: client.id, clientName: client.name, scheduledFor, fired: false };
+    setReminders(prev => [...prev.filter(r => r.clientName.toLowerCase() !== client.name.toLowerCase()), reminder]);
+    scheduleReminder(reminder);
+    addToast(`Lembrete agendado: ${new Date(scheduledFor).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`, 'info');
   };
+  const pendingReminders = reminders.filter(r => !r.fired).sort((a, b) => a.scheduledFor - b.scheduledFor);
+  const reminderNames = useMemo(() => new Set(pendingReminders.map(r => r.clientName.toLowerCase())), [pendingReminders]);
 
-  const handleFocusPrev = () => {
-    if (safeFocusIndex > 0) setFocusIndex(safeFocusIndex - 1);
-  };
-
-  // --- Handlers: Banco de Clientes ---
-  const saveToDatabase = (parsed: ParsedClient[]) => {
-    setClientDatabase(prev => {
-      const existingNames = new Set(prev.map(c => c.name.toLowerCase()));
-      const newEntries: StoredClient[] = parsed
-        .filter(c => !existingNames.has(c.name.toLowerCase()))
-        .map(c => ({
-          id: crypto.randomUUID(),
-          name: c.name,
-          dueDate: c.dueDate instanceof Date ? c.dueDate.toISOString() : String(c.dueDate),
-          rawNotes: c.rawNotes,
-          originalLine: c.originalLine || '',
-          type: c.type,
-          savedAt: Date.now(),
-        }));
-      const updated = prev.map(stored => {
-        const match = parsed.find(c => c.name.toLowerCase() === stored.name.toLowerCase());
-        const newDueDate = match ? (match.dueDate instanceof Date ? match.dueDate.toISOString() : String(match.dueDate)) : stored.dueDate;
-        return match ? { ...stored, dueDate: newDueDate, rawNotes: match.rawNotes, originalLine: match.originalLine || stored.originalLine || '', savedAt: Date.now() } : stored;
-      });
-      return [...updated, ...newEntries];
-    });
-  };
-
+  // --- Banco ---
   const handleLoadFromDatabase = (clients: StoredClient[]) => {
     // Cabeçalho de seção por tipo, senão o parser chuta o tipo pela quantidade de datas
     const block = (type: 'iptv' | 'p2p') => {
@@ -780,432 +593,366 @@ function App() {
       return lines.length ? [type === 'p2p' ? 'Clientes P2P' : 'Clientes IPTV', ...lines].join('\n') : '';
     };
     appendInput([block('iptv'), block('p2p')].filter(Boolean).join('\n\n'));
-    addToast('Clientes carregados no painel', 'success');
+    addToast(`${clients.length} cliente(s) adicionados à lista de cobrança.`, 'success');
+    setIsImportOpen(true);
   };
 
-  const handlePhoneEdit = (clientName: string, phone: string) => {
-    setPhoneOverrides(prev => ({ ...prev, [clientName]: phone }));
-    // Update rawNotes immediately in current results
-    const { cleanText } = extractPhone(results.find(r => r.name === clientName)?.rawNotes || '');
-    const apply = (list: ParsedClient[]) => list.map(r =>
-      r.name === clientName
-        ? { ...r, rawNotes: phone ? `${phone} ${cleanText}`.trim() : r.rawNotes }
-        : r
-    );
-    setResults(apply);
-    setFlatResults(apply);
+  const handleExport = () => {
+    if (filteredResults.length === 0) return;
+    const rows = filteredResults.map(r => ({ name: r.name, date: r.dueDate, notes: extractPhone(r.rawNotes).cleanText, phone: extractPhone(r.rawNotes).original, customNotes: r.customNotes || '' }));
+    const csv = generateCSV(rows, config.defaultTime || '20:00');
+    const name = `clientes_export_${Date.now()}.csv`;
+    void saveFile(name, String.fromCharCode(0xfeff) + csv, () => downloadBlob(new Blob([String.fromCharCode(0xfeff), csv], { type: 'text/csv;charset=utf-8;' }), name));
+    addToast('Arquivo exportado.', 'success');
   };
 
-  const handleRemoveFromDatabase = (id: string) => {
-    setClientDatabase(prev => prev.filter(c => c.id !== id));
+  // --- Risco e ficha do cliente ---
+  const risks = useMemo(() => riskByName(payments, actionHistory), [payments, actionHistory]);
+  const storedByName = useMemo(() => new Map(clientDatabase.map(c => [c.name.toLowerCase(), c])), [clientDatabase]);
+  // Cliente para os modais (pagamento, edição, lembrete): o da lista processada, senão o do banco
+  const parsedByName = (name: string): ParsedClient | null => {
+    const key = name.toLowerCase();
+    const inList = results.find(r => r.name.toLowerCase() === key) || flatResults.find(r => r.name.toLowerCase() === key);
+    const stored = storedByName.get(key);
+    return inList || (stored ? storedToParsed(stored) : null);
   };
+  const fromProfile = (open: (c: ParsedClient) => void) => {
+    const c = profileName && parsedByName(profileName);
+    setProfileName(null);
+    if (c) open(c);
+  };
+  const profileStored = profileName ? storedByName.get(profileName.toLowerCase()) : undefined;
 
-  const handleClearDatabase = () => {
-    setClientDatabase([]);
-    addToast('Banco limpo', 'info');
-  };
+  // App Android: recria os alarmes locais quando clientes, lembretes ou configurações mudam
+  const riskCount = useMemo(() => clientDatabase.filter(c => risks.has(c.name.toLowerCase())).length, [clientDatabase, risks]);
+  useEffect(() => {
+    if (!isNative()) return;
+    const run = () => void rescheduleNative(clientDatabase, reminders, notifySettings(config), riskCount).catch(() => undefined);
+    const timer = setTimeout(run, 800);
+    window.addEventListener(RESCHEDULE_EVENT, run);
+    return () => { clearTimeout(timer); window.removeEventListener(RESCHEDULE_EVENT, run); };
+  }, [clientDatabase, reminders, config, riskCount]);
+  useEffect(() => onNativeNotificationTap(p => { if (NAV.some(n => n.id === p)) setPage(p as Page); }), []);
 
-  // --- Handlers: Lembretes ---
-  const handleAddReminder = (client: ParsedClient, scheduledFor: number) => {
-    const reminder: Reminder = {
-      id: crypto.randomUUID(),
-      clientId: client.id,
-      clientName: client.name,
-      scheduledFor,
-      fired: false,
-    };
-    setReminders(prev => {
-      const withoutOld = prev.filter(r => r.clientName.toLowerCase() !== client.name.toLowerCase());
-      return [...withoutOld, reminder];
-    });
-    const delay = scheduledFor - Date.now();
-    if (delay > 0 && delay < 24 * 60 * 60 * 1000) {
-      setTimeout(() => {
-        addToast(`⏰ Lembrete: ${client.name}`, 'warning');
-        if ('Notification' in window && Notification.permission === 'granted') {
-          new Notification('TVBR.Cob', { body: `Hora de cobrar: ${client.name}`, icon: '/favicon.ico' });
-        }
-        setReminders(prev => prev.map(r => r.id === reminder.id ? { ...r, fired: true } : r));
-      }, delay);
-    }
-    const dt = new Date(scheduledFor);
-    const label = dt.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
-    addToast(`🔔 Lembrete agendado: ${label}`, 'info');
-  };
 
-  const stopFocusMode = () => {
-      setResultViewMode('grid');
-      setIsQueueMode(false);
-      if (invalidClients.length > 0) setShowInvalidReport(true);
-  };
+  const renderCard = (client: ParsedClient, viewMode: ResultViewMode = resultViewMode) => (
+    <ClientCard
+      key={`${client.id}-${viewMode}`}
+      client={client}
+      config={config}
+      isExpiredMode={isExpiredMode}
+      viewMode={viewMode}
+      searchQuery={searchQuery}
+      isSent={isSent(client.id)}
+      isPaid={isPaid(client)}
+      hasReminder={reminderNames.has(client.name.toLowerCase())}
+      phoneOverride={phoneOverrides[client.name] || ''}
+      onEdit={setEditingClient}
+      onCopy={copyToClipboard}
+      onMarkAsSent={handleMarkAsSent}
+      onPay={setPayingClient}
+      onLinkClient={setLinkingClient}
+      onAddReminder={setReminderClient}
+      onOpenProfile={c => setProfileName(c.name)}
+      risk={risks.get(client.name.toLowerCase())}
+    />
+  );
+
+  const syncTitle = syncStatus === 'ok' ? 'Sincronizado' : syncStatus === 'syncing' ? 'Sincronizando...' : 'Sincronização com problema';
+  const pageTitle = NAV.find(n => n.id === page)?.label;
+  const showSearch = page === 'billing' || page === 'clients';
 
   return (
-    <div className="h-screen flex flex-col bg-gray-100 dark:bg-slate-950 text-gray-800 dark:text-slate-100 overflow-hidden">
-      
-      {/* ── HEADER ── */}
-      <header className="flex-shrink-0 z-40 bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 h-14 flex items-center px-3 sm:px-5 justify-between gap-2">
-        <div className="flex items-center gap-2">
-          {/* Hambúrguer — só aparece no mobile */}
-          <button
-            onClick={() => setIsSidebarOpen(v => !v)}
-            className="md:hidden p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-500 dark:text-slate-400 hover:text-gray-800 dark:hover:text-slate-100 transition-colors"
-            aria-label="Menu"
-          >
-            <Menu size={20} />
-          </button>
-          <div className="flex-shrink-0">
-            <TvBrIcon size={32} />
+    <div className="h-screen flex bg-canvas text-ink overflow-hidden">
+      {/* ── SIDEBAR ── */}
+      {isSidebarOpen && <div className="fixed inset-0 z-40 bg-graphite/50 md:hidden" onClick={() => setIsSidebarOpen(false)} />}
+      <aside className={cx(
+        'fixed md:static inset-y-0 left-0 z-50 w-64 flex-shrink-0 bg-subtle border-r border-line flex flex-col transition-transform duration-300',
+        isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0',
+      )}>
+        <div className="h-14 flex items-center gap-2.5 px-5 bg-card border-b border-line">
+          <BrandMark size={28} />
+          <span className="font-medium text-ink">TVBR<span className="text-brand">.Cob</span></span>
+          <button onClick={() => setIsSidebarOpen(false)} className="ml-auto p-1.5 text-muted md:hidden" aria-label="Fechar menu"><X size={18} /></button>
+        </div>
+
+        {/* Bloco de perfil (roxo, como na referência) */}
+        <div className="bg-brand text-white px-5 py-4 flex items-center gap-3">
+          <span className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center font-medium">
+            TV
+          </span>
+          <div className="min-w-0">
+            <p className="text-sm font-medium truncate">Minha conta</p>
+            <p className="text-xs text-white/75">Gestor de cobranças</p>
           </div>
-          <h1 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white tracking-tight">
-            TVBR<span className="text-emerald-600 dark:text-emerald-400">.Cob</span>
-          </h1>
         </div>
 
-        <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
-          {results.length > 0 && resultViewMode !== 'focus' && (
-            <>
-              <button onClick={() => setIsLinksOpen(true)} className="hidden sm:flex items-center gap-1.5 bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-emerald-600 dark:text-emerald-400 px-3 py-2.5 rounded-xl transition-colors text-xs" title="Links Rápidos">
-                <LinkIcon size={13} /> <span className="hidden sm:inline">Links</span>
+        <nav className="flex-1 overflow-y-auto py-3">
+          {NAV.map(item => {
+            const badge = item.id === 'billing' ? results.length : item.id === 'clients' ? clientDatabase.length : 0;
+            const active = page === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => goto(item.id)}
+                className={cx(
+                  'w-full flex items-center gap-3 px-5 py-2.5 text-sm transition-colors border-l-[3px]',
+                  active ? 'border-brand text-brand bg-card font-medium' : 'border-transparent text-ink/80 hover:text-ink hover:bg-card/60',
+                )}
+              >
+                <item.icon size={17} className={active ? 'text-brand' : 'text-muted'} />
+                {item.label}
+                {badge > 0 && <span className={cx('ml-auto text-[10px] px-1.5 py-0.5 rounded-full', active ? 'bg-brand text-white' : 'bg-line text-muted')}>{badge}</span>}
               </button>
-              <button onClick={() => setIsHistoryOpen(true)} className="hidden sm:flex items-center gap-1.5 bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-gray-500 dark:text-slate-400 px-3 py-2.5 rounded-xl transition-colors text-xs relative" title="Histórico">
-                <History size={13} /> <span className="hidden sm:inline">Histórico</span>
-                {actionHistory.length > 0 && <span className="absolute top-1 right-1 w-1.5 h-1.5 bg-emerald-600 rounded-full"></span>}
-              </button>
-              <button onClick={() => startFocusMode(true)} className="flex items-center gap-1.5 bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-gray-500 dark:text-slate-400 px-3 py-2.5 rounded-xl transition-colors text-xs" title="Fila">
-                <Rocket size={13} /> <span className="hidden sm:inline">Fila</span>
-              </button>
-              <button onClick={() => startFocusMode(false)} className="flex items-center gap-1.5 bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-gray-500 dark:text-slate-400 px-3 py-2.5 rounded-xl transition-colors text-xs" title="Foco">
-                <Play size={13} fill="currentColor" /> <span className="hidden sm:inline">Foco</span>
-              </button>
-              <button onClick={() => setResultViewMode(resultViewMode === 'grid' ? 'list' : 'grid')} className="flex items-center gap-1.5 bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-gray-500 dark:text-slate-400 px-3 py-2.5 rounded-xl transition-colors text-xs" title="Alternar visualização">
-                {resultViewMode === 'grid' ? <LayoutList size={13} /> : <LayoutGrid size={13} />}
-              </button>
-            </>
-          )}
-          {syncStatus !== 'off' && (
-            <button
-              onClick={() => setIsConfigOpen(true)}
-              className={`flex items-center px-2.5 py-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 dark:hover:bg-slate-700 transition-colors ${syncStatus === 'ok' ? 'text-teal-600 dark:text-teal-400' : syncStatus === 'syncing' ? 'text-gray-400' : 'text-amber-500'}`}
-              title={syncStatus === 'ok' ? 'Sincronizado' : syncStatus === 'syncing' ? 'Sincronizando...' : 'Sincronização com problema — abrir Configurações'}
-            >
-              {syncStatus === 'syncing' ? <RefreshCw size={13} className="animate-spin" /> : syncStatus === 'ok' ? <Cloud size={13} /> : <CloudOff size={13} />}
-            </button>
-          )}
-          <button onClick={() => setIsDarkMode(!isDarkMode)} className="flex items-center gap-1.5 bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-gray-500 dark:text-slate-400 px-3 py-2.5 rounded-xl transition-colors text-xs" title={isDarkMode ? 'Modo claro' : 'Modo escuro'}>
-            {isDarkMode ? <Sun size={13} /> : <Moon size={13} />}
-          </button>
+            );
+          })}
+        </nav>
+
+        <div className="p-4 border-t border-line">
+          <Button variant="primary" icon={Upload} className="w-full" onClick={() => { setIsImportOpen(true); setIsSidebarOpen(false); }}>Importar lista</Button>
         </div>
-      </header>
+      </aside>
 
-      {/* ── BODY ── */}
-      <div className="flex flex-1 overflow-hidden relative">
+      {/* ── COLUNA PRINCIPAL ── */}
+      <div className="flex-1 flex flex-col min-w-0">
+        <header className="h-14 flex-shrink-0 bg-card border-b border-line flex items-center gap-2 px-3 sm:px-5">
+          <button onClick={() => setIsSidebarOpen(true)} className="p-2 rounded-md text-muted hover:text-ink hover:bg-subtle md:hidden" aria-label="Menu"><MenuIcon size={20} /></button>
+          <span className="text-sm font-medium text-ink md:hidden">{pageTitle}</span>
 
-        {/* Backdrop mobile */}
-        {isSidebarOpen && (
-          <div
-            className="fixed inset-0 z-40 bg-black/60 md:hidden"
-            onClick={() => setIsSidebarOpen(false)}
-          />
-        )}
-
-        {/* ── SIDEBAR ── */}
-        <aside className={`
-          fixed md:relative inset-y-0 left-0 z-50
-          w-[85vw] max-w-sm md:w-80 flex-shrink-0
-          bg-white dark:bg-slate-900 border-r border-gray-200 dark:border-slate-800
-          flex flex-col overflow-hidden
-          transition-transform duration-300 ease-in-out
-          ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
-        `}>
-          {/* Cabeçalho da sidebar (mobile: mostra fechar) */}
-          <div className="flex-shrink-0 md:hidden flex items-center justify-between px-5 pt-5 pb-3">
-            <div className="flex items-center gap-2">
-              <TvBrIcon size={28} />
-              <span className="text-base font-bold text-gray-900 dark:text-white tracking-tight">
-                TVBR<span className="text-emerald-600 dark:text-emerald-400">.Cob</span>
-              </span>
+          {showSearch && (
+            <div className="relative ml-auto md:ml-0 w-40 sm:w-72">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+              <input
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder={page === 'clients' ? 'Buscar cliente...' : 'Buscar na lista...'}
+                className="w-full pl-9 pr-8 py-1.5 rounded-md border border-line bg-subtle text-sm text-ink placeholder:text-muted outline-none focus:border-brand focus:bg-card"
+              />
+              {searchQuery && <button onClick={() => setSearchQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted hover:text-ink"><X size={14} /></button>}
             </div>
-            <button
-              onClick={() => setIsSidebarOpen(false)}
-              className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 dark:text-slate-500 hover:text-gray-700 dark:hover:text-slate-200 transition-colors"
-            >
-              <X size={20} />
+          )}
+
+          <div className="flex items-center gap-1 ml-auto">
+            {syncStatus !== 'off' && (
+              <button onClick={() => goto('settings')} title={syncTitle} className={cx('p-2 rounded-md hover:bg-subtle', syncStatus === 'ok' ? 'text-ok' : syncStatus === 'syncing' ? 'text-muted' : 'text-warn')}>
+                {syncStatus === 'syncing' ? <RefreshCw size={17} className="animate-spin" /> : syncStatus === 'ok' ? <Cloud size={17} /> : <CloudOff size={17} />}
+              </button>
+            )}
+            <Menu
+              trigger={
+                <span className="relative block">
+                  <Bell size={17} />
+                  {pendingReminders.length > 0 && <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-danger" />}
+                </span>
+              }
+              items={pendingReminders.length
+                ? pendingReminders.slice(0, 8).map(r => ({
+                  label: `${r.clientName} · ${new Date(r.scheduledFor).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`,
+                  icon: Bell,
+                  onClick: () => setReminders(prev => prev.filter(x => x.id !== r.id)),
+                }))
+                : [{ label: 'Nenhum lembrete agendado', icon: Bell, onClick: () => undefined, disabled: true }]}
+            />
+            <button onClick={() => setIsDarkMode(v => !v)} title={isDarkMode ? 'Modo claro' : 'Modo escuro'} className="p-2 rounded-md text-muted hover:text-ink hover:bg-subtle">
+              {isDarkMode ? <Sun size={17} /> : <Moon size={17} />}
             </button>
           </div>
+        </header>
 
-          <div className="flex-1 overflow-y-auto p-5 space-y-5">
-
-            {/* Aviso Sexta */}
-            {weekday.mode === 'friday_double' && (
-              <div className="bg-amber-500/10 border border-amber-500/20 p-3 rounded-xl flex items-start gap-2.5">
-                <Info size={16} className="text-amber-400 mt-0.5 flex-shrink-0" />
-                <p className="text-sm text-amber-300 leading-snug">Sexta: amanhã + depois de amanhã serão incluídos</p>
+        <main className="flex-1 overflow-y-auto">
+          <div className="max-w-[1400px] mx-auto p-4 sm:p-6 animate-fade-in-up" key={page}>
+            {dailyBanner && (
+              <div className="mb-5 bg-card border border-line/60 border-l-4 border-l-brand rounded-md shadow-card px-4 py-3 flex flex-wrap items-center gap-3">
+                <span className="w-9 h-9 rounded-md bg-brand-soft text-brand flex items-center justify-center flex-shrink-0"><Sunrise size={18} /></span>
+                <div className="flex-1 min-w-[200px]">
+                  <p className="text-sm font-medium text-ink">Resumo de hoje</p>
+                  <p className="text-xs text-muted">
+                    <b className="text-warn">{dailyBanner.today}</b> vencem hoje · <b className="text-danger">{dailyBanner.overdue}</b> vencidos (4–5 dias) · <b className="text-brand">{dailyBanner.tomorrow}</b> vencem amanhã
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button size="sm" variant="primary" disabled={!dailyBanner.today} onClick={() => { dismissDaily(); runPeriod('today', { navigate: true }); }}>Cobrar hoje</Button>
+                  <Button size="sm" disabled={!dailyBanner.overdue} onClick={() => { dismissDaily(); runPeriod('overdue', { navigate: true }); }}>Cobrar vencidos</Button>
+                  <Button size="icon" variant="ghost" onClick={dismissDaily} title="Dispensar até amanhã"><X size={15} /></Button>
+                </div>
               </div>
             )}
-
-            {/* Entrada de Dados */}
-            <div className="space-y-2">
-              <span className="text-xs font-bold text-gray-400 dark:text-slate-500 uppercase tracking-widest">Dados</span>
-              <textarea
-                ref={textareaRef}
-                value={inputData}
-                onChange={(e) => setInputData(e.target.value)}
-                placeholder="Cole aqui a lista (IPTV ou P2P)..."
-                className="w-full h-36 p-3 rounded-xl border border-gray-300 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-800 dark:text-slate-200 focus:ring-2 focus:ring-emerald-500 outline-none resize-none font-mono text-xs placeholder-gray-400 dark:placeholder-slate-600 transition-all leading-relaxed"
+            {page === 'dashboard' && (
+              <Dashboard
+                clients={clientDatabase}
+                payments={payments}
+                history={actionHistory}
+                config={config}
+                links={clientLinks}
+                riskCount={clientDatabase.filter(c => risks.has(c.name.toLowerCase())).length}
+                onCharge={p => runPeriod(p, { navigate: true })}
+                onImport={() => setIsImportOpen(true)}
+                onOpenClients={() => goto('clients')}
+                onOpenRisk={() => { setClientsFilter('risk'); goto('clients'); }}
+                onOpenProfile={setProfileName}
               />
-              <div className="flex gap-2">
-                {/* sem "accept": no Android o filtro por extensão vira tipo MIME e deixa CSVs
-                    de Downloads/WhatsApp/Drive cinza (não selecionáveis). O conteúdo é validado ao ler. */}
-                <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" />
-                <button onClick={() => fileInputRef.current?.click()} className="flex-1 text-xs bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-gray-500 dark:text-slate-400 px-3 py-2.5 rounded-xl transition-colors flex items-center justify-center gap-1.5">
-                  <Upload size={13} /> Arquivo
-                </button>
-                <button onClick={handlePasteInput} className="flex-1 text-xs bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-gray-500 dark:text-slate-400 px-3 py-2.5 rounded-xl transition-colors flex items-center justify-center gap-1.5">
-                  <Clipboard size={13} /> Colar
-                </button>
-              </div>
-            </div>
-
-            {/* Filtro principal */}
-            <div className="space-y-3">
-              <span className="text-xs font-bold text-gray-400 dark:text-slate-500 uppercase tracking-widest">Filtro</span>
-              <button onClick={() => { handleFilterUpcoming(); setIsSidebarOpen(false); }} className="w-full bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-600 dark:text-emerald-400 py-2.5 px-3 rounded-xl text-xs font-semibold transition-all flex items-center justify-center gap-1.5">
-                <CalendarCheck size={13} />
-                {weekday.mode === 'friday_double' ? 'Próximos (Amanhã + Depois)' : 'Próximos (Amanhã)'}
-              </button>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 dark:text-slate-500 mb-1.5">Início</label>
-                  <input type="date" value={unifiedDates.start} onChange={(e) => setUnifiedDates({...unifiedDates, start: e.target.value})} className="w-full px-2 py-2.5 rounded-xl bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 text-xs outline-none focus:ring-2 focus:ring-emerald-500 dark:[color-scheme:dark]" />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 dark:text-slate-500 mb-1.5">Fim</label>
-                  <input type="date" value={unifiedDates.end} onChange={(e) => setUnifiedDates({...unifiedDates, end: e.target.value})} className="w-full px-2 py-2.5 rounded-xl bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 text-xs outline-none focus:ring-2 focus:ring-emerald-500 dark:[color-scheme:dark]" />
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <button onClick={() => { processData(unifiedDates, false); setIsSidebarOpen(false); }} className="flex-1 bg-emerald-600 hover:bg-emerald-600 text-white py-2.5 px-3 rounded-xl text-xs font-bold transition-all active:scale-[0.97] flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-900/20">
-                  <Filter size={13} /> Processar
-                </button>
-                <button onClick={() => { setInputData(''); setUnifiedDates({start:'',end:''}); setResults([]); setFlatResults([]); addToast('Limpo','info'); }} className="bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-gray-400 dark:text-slate-500 hover:text-red-500 dark:hover:text-red-400 py-2.5 px-3 rounded-xl transition-all" title="Limpar">
-                  <Trash2 size={13} />
-                </button>
-              </div>
-            </div>
-
-            <div className="border-t border-gray-200 dark:border-slate-800" />
-
-            {/* Vencidos */}
-            <div className="space-y-3">
-              <span className="text-xs font-bold text-gray-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                <CalendarX size={14} className="text-red-500" /> Vencidos
-              </span>
-              <button onClick={() => { handleFilterExpiredRecent(); setIsSidebarOpen(false); }} className="w-full bg-red-500/10 hover:bg-red-500/20 text-red-500 dark:text-red-400 py-2.5 px-3 rounded-xl text-xs font-semibold transition-all flex items-center justify-center gap-1.5">
-                <History size={13} /> Vencidos (4-5 dias)
-              </button>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 dark:text-slate-500 mb-1.5">Início</label>
-                  <input type="date" value={expiredDates.start} onChange={(e) => setExpiredDates({...expiredDates, start: e.target.value})} className="w-full px-2 py-2.5 rounded-xl bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 text-xs outline-none focus:ring-2 focus:ring-red-500 dark:[color-scheme:dark]" />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 dark:text-slate-500 mb-1.5">Fim</label>
-                  <input type="date" value={expiredDates.end} onChange={(e) => setExpiredDates({...expiredDates, end: e.target.value})} className="w-full px-2 py-2.5 rounded-xl bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 text-xs outline-none focus:ring-2 focus:ring-red-500 dark:[color-scheme:dark]" />
-                </div>
-              </div>
-              <button onClick={() => { processData(expiredDates, true); setIsSidebarOpen(false); }} className="w-full bg-red-600 hover:bg-red-500 text-white py-2.5 px-3 rounded-xl text-xs font-bold transition-all active:scale-[0.97] flex items-center justify-center gap-1.5 shadow-lg shadow-red-900/20">
-                <Search size={13} /> Filtrar Vencidos
-              </button>
-            </div>
-
-            <div className="flex gap-2">
-              <button onClick={() => setIsDatabaseOpen(true)} className="flex-1 text-xs bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-gray-500 dark:text-slate-400 px-3 py-2.5 rounded-xl transition-colors flex items-center justify-center gap-1.5">
-                <Database size={13} /> Banco
-                {clientDatabase.length > 0 && (
-                  <span className="bg-gray-400 dark:bg-slate-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-none">{clientDatabase.length}</span>
-                )}
-              </button>
-              <button onClick={() => setIsConfigOpen(true)} className="flex-1 text-xs bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-gray-500 dark:text-slate-400 px-3 py-2.5 rounded-xl transition-colors flex items-center justify-center gap-1.5">
-                <Settings size={13} /> Config
-              </button>
-            </div>
-
+            )}
+            {page === 'billing' && (
+              <Billing
+                hasInput={!!inputData.trim()}
+                processed={!!resultTitle}
+                title={resultTitle}
+                clients={filteredResults}
+                totalCount={results.length}
+                counts={billingCounts}
+                period={period}
+                isFriday={weekday.mode === 'friday_double'}
+                customDates={customDates}
+                typeFilter={typeFilter}
+                statusFilter={statusFilter}
+                tagFilter={tagFilter}
+                tags={config.tags || []}
+                viewMode={resultViewMode === 'list' ? 'list' : 'grid'}
+                onPeriod={p => runPeriod(p)}
+                onCustomDates={setCustomDates}
+                onApplyCustom={() => runPeriod('custom')}
+                onTypeFilter={setTypeFilter}
+                onStatusFilter={setStatusFilter}
+                onTagFilter={setTagFilter}
+                onResetFilters={() => { setTypeFilter('all'); setStatusFilter('all'); setTagFilter(''); }}
+                onToggleView={() => setResultViewMode(v => (v === 'list' ? 'grid' : 'list'))}
+                onFocus={startFocusMode}
+                onExport={handleExport}
+                onImport={() => setIsImportOpen(true)}
+                renderCard={c => renderCard(c)}
+              />
+            )}
+            {page === 'clients' && (
+              <Clients
+                clients={clientDatabase}
+                payments={payments}
+                searchQuery={searchQuery}
+                onLoad={handleLoadFromDatabase}
+                onRemove={id => setClientDatabase(prev => prev.filter(c => c.id !== id))}
+                onClearAll={() => { setClientDatabase([]); addToast('Banco limpo.', 'info'); }}
+                onPay={c => setPayingClient(storedToParsed(c))}
+                onRemind={c => setReminderClient(storedToParsed(c))}
+                onImport={() => setIsImportOpen(true)}
+                risks={risks}
+                filter={clientsFilter}
+                onFilter={setClientsFilter}
+                onOpenProfile={setProfileName}
+              />
+            )}
+            {page === 'history' && <History history={actionHistory} payments={payments} onOpenProfile={setProfileName} />}
+            {page === 'settings' && (
+              <Settings
+                config={config}
+                onSave={handleSaveConfig}
+                onToast={addToast}
+                counts={{ clients: clientDatabase.length, payments: payments.length, history: actionHistory.length }}
+              />
+            )}
           </div>
-        </aside>
-
-        {/* ── ÁREA PRINCIPAL ── */}
-        <main className="flex-1 overflow-y-auto bg-gray-100 dark:bg-slate-950">
-          {results.length === 0 ? (
-            <div className="h-full flex items-center justify-center p-6 sm:p-8">
-              <div className="text-center space-y-5 max-w-xs">
-                <div className="w-16 h-16 rounded-2xl bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700/50 flex items-center justify-center mx-auto shadow-sm">
-                  <Users size={30} className="text-gray-400 dark:text-slate-600" />
-                </div>
-                <div>
-                  <p className="text-gray-700 dark:text-slate-300 font-semibold">Pronto para cobrar</p>
-                  <p className="text-gray-500 dark:text-slate-500 text-sm mt-1 md:hidden">Abra o <span className="text-emerald-600 dark:text-emerald-400 font-medium">menu</span>, cole a lista e clique em <span className="text-emerald-600 dark:text-emerald-400 font-medium">Processar</span></p>
-                  <p className="text-gray-500 dark:text-slate-500 text-sm mt-1 hidden md:block">Cole a lista no painel e clique em <span className="text-emerald-600 dark:text-emerald-400 font-medium">Processar</span></p>
-                </div>
-                <div className="flex items-center justify-center gap-4 text-xs text-gray-400 dark:text-slate-600">
-                  <span className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-emerald-600" /> IPTV</span>
-                  <span className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-violet-500" /> P2P</span>
-                  <span className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-blue-500" /> CSV</span>
-                </div>
-              </div>
-            </div>
-          ) : resultViewMode !== 'focus' ? (
-            <div className="p-3 sm:p-6 animate-fade-in-up">
-              {/* Dashboard + Toolbar unificados */}
-              {/* Mobile: empilhado; Desktop: grid 3 colunas */}
-              <div className="bg-white dark:bg-slate-800 rounded-xl mb-5 overflow-hidden">
-                {/* Linha 1 mobile: Título + Pesquisar + CSV */}
-                <div className="flex items-center divide-x divide-gray-100 dark:divide-slate-700 border-b border-gray-100 dark:border-slate-700 sm:border-b-0">
-                  <div className="px-3 py-2.5 min-w-0 flex-1">
-                    <h2 className="text-xs font-bold text-gray-500 dark:text-slate-400 truncate">{resultTitle}</h2>
-                  </div>
-                  <div className="px-2 py-1.5 flex-shrink-0">
-                    <div className="relative">
-                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-500" size={12} />
-                      <input type="text" placeholder="Pesquisar..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-7 pr-2 py-1.5 w-24 rounded-lg bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300 text-xs placeholder-gray-400 dark:placeholder-slate-500 focus:ring-2 focus:ring-emerald-500 outline-none" />
-                    </div>
-                  </div>
-                  <button onClick={handleExport} className="px-3 py-2.5 flex items-center gap-1.5 text-gray-400 dark:text-slate-500 hover:bg-gray-50 dark:hover:bg-slate-700 hover:text-gray-600 dark:hover:text-slate-300 transition-colors text-xs flex-shrink-0">
-                    <Download size={13} /> CSV
-                  </button>
-                </div>
-                {/* Linha 2: Stats sempre em linha horizontal com scroll se necessário */}
-                <div className="flex items-center divide-x divide-gray-100 dark:divide-slate-700 overflow-x-auto">
-                  <div className="px-3 py-2 flex items-center gap-1.5 flex-shrink-0">
-                    <Users size={12} className="text-emerald-600 dark:text-emerald-400" />
-                    <span className="text-xs text-gray-500 dark:text-slate-400">Clientes</span>
-                    <span className="text-xs font-bold text-gray-900 dark:text-white">{dashboardStats.total}</span>
-                  </div>
-                  <div className="px-3 py-2 flex items-center gap-1.5 flex-shrink-0">
-                    <CalendarCheck size={12} className="text-amber-500 dark:text-amber-400" />
-                    <span className="text-xs text-gray-500 dark:text-slate-400">Hoje</span>
-                    <span className="text-xs font-bold text-amber-600 dark:text-amber-400">{dashboardStats.today}</span>
-                  </div>
-                  <div className="px-3 py-2 flex items-center gap-1.5 flex-shrink-0">
-                    <AlertTriangle size={12} className="text-red-500 dark:text-red-400" />
-                    <span className="text-xs text-gray-500 dark:text-slate-400">Vencidos</span>
-                    <span className="text-xs font-bold text-red-600 dark:text-red-400">{dashboardStats.expired}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Cards */}
-              <div className={resultViewMode === 'grid' ? "grid grid-cols-1 gap-3" : "flex flex-col gap-2"}>
-                {filteredResults.length > 0 ? filteredResults.map((client) => (
-                  <ClientCard key={client.id} client={client} config={config} isExpiredMode={isExpiredMode} viewMode={resultViewMode} searchQuery={searchQuery} isSent={!!sentClients[client.id]} hasReminder={reminders.some(r => r.clientName.toLowerCase() === client.name.toLowerCase() && !r.fired)} phoneOverride={phoneOverrides[client.name] || ''} onEdit={setEditingClient} onCopy={copyToClipboard} onMarkAsSent={handleMarkAsSent} onOpenReceipt={setReceiptClient} onLinkClient={setLinkingClient} onAddReminder={setReminderClient} />
-                )) : (
-                  <div className="text-center py-16 text-gray-500 dark:text-slate-600 bg-white dark:bg-slate-800/30 rounded-xl border border-dashed border-gray-300 dark:border-slate-700">
-                    <p className="text-sm font-medium">Nenhum resultado encontrado.</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          ) : null}
         </main>
       </div>
 
       {/* ── MODO FOCO ── */}
-      {resultViewMode === 'focus' && focusClient && (
-        <div className="fixed inset-0 z-50 bg-gray-50 dark:bg-slate-950 flex flex-col">
-          <div className="h-14 flex items-center justify-between px-6 bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800">
-            <div className="flex items-center gap-4">
-              <button onClick={stopFocusMode} className="flex items-center gap-1.5 bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-gray-700 dark:text-slate-300 px-3 py-2.5 rounded-xl transition-colors text-xs">
-                <ArrowLeft size={13} />
-              </button>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-gray-500 dark:text-slate-500 uppercase font-bold tracking-wider">Modo Foco</span>
-                  {isQueueMode && <span className="bg-amber-500/20 text-amber-700 dark:text-amber-300 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 animate-pulse"><Rocket size={9} /> FILA</span>}
-                </div>
-                <span className="text-sm font-bold text-gray-900 dark:text-white">{safeFocusIndex + 1} / {filteredResults.length}</span>
+      {focusClient && (
+        <div className="fixed inset-0 z-50 bg-canvas flex flex-col">
+          <div className="h-14 flex items-center gap-4 px-4 sm:px-6 bg-card border-b border-line">
+            <Button size="sm" icon={ArrowLeft} onClick={stopFocusMode}>Sair</Button>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted">{isQueueMode ? 'Fila de envio' : 'Modo foco'}</span>
+                {isQueueMode && <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-brand text-white flex items-center gap-1 animate-pulse"><Rocket size={9} /> ATIVA</span>}
               </div>
+              <span className="text-sm font-medium text-ink">{safeFocusIndex + 1} de {focusClients.length}</span>
             </div>
-            <div className="w-48 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full overflow-hidden">
-              <div className="h-full bg-emerald-600 transition-all duration-300" style={{ width: `${((safeFocusIndex + 1) / filteredResults.length) * 100}%` }} />
-            </div>
+            <div className="ml-auto w-32 sm:w-56"><Progress value={((safeFocusIndex + 1) / focusClients.length) * 100} /></div>
           </div>
-          <div className="flex-1 flex items-center justify-center p-4 sm:p-10 overflow-hidden">
-            <div className="w-full max-w-2xl h-full flex flex-col justify-center">
-              <ClientCard client={focusClient} config={config} isExpiredMode={isExpiredMode} viewMode="focus" searchQuery={searchQuery} isSent={!!sentClients[focusClient.id]} hasReminder={reminders.some(r => r.clientName.toLowerCase() === focusClient.name.toLowerCase() && !r.fired)} phoneOverride={phoneOverrides[focusClient.name] || ''} onEdit={setEditingClient} onCopy={copyToClipboard} onMarkAsSent={handleMarkAsSent} onOpenReceipt={setReceiptClient} onLinkClient={setLinkingClient} onAddReminder={setReminderClient} />
-            </div>
+          <div className="flex-1 flex items-center justify-center p-3 sm:p-8 overflow-hidden">
+            <div className="w-full max-w-2xl h-full flex flex-col justify-center">{renderCard(focusClient, 'focus')}</div>
           </div>
-          <div className="h-20 bg-white dark:bg-slate-900 border-t border-gray-200 dark:border-slate-800 flex items-center justify-center gap-6">
-            <button onClick={handleFocusPrev} disabled={safeFocusIndex === 0} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-gray-500 dark:text-slate-400 text-xs disabled:opacity-20 disabled:cursor-not-allowed transition-all"><ChevronLeft size={13} /></button>
-            <span className="text-xs text-gray-400 dark:text-slate-600 font-medium">Navegar</span>
-            <button onClick={handleFocusNext} disabled={!isQueueMode && safeFocusIndex === filteredResults.length - 1} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs disabled:opacity-20 disabled:cursor-not-allowed transition-all"><ChevronRight size={13} /></button>
+          <div className="h-16 bg-card border-t border-line flex items-center justify-center gap-4">
+            <Button icon={ChevronLeft} onClick={handleFocusPrev} disabled={safeFocusIndex === 0}>Anterior</Button>
+            <Button variant="primary" onClick={handleFocusNext} disabled={!isQueueMode && safeFocusIndex === focusClients.length - 1}>
+              {isQueueMode && safeFocusIndex === focusClients.length - 1 ? 'Concluir' : 'Próximo'} <ChevronRight size={15} />
+            </Button>
           </div>
         </div>
       )}
-
-      {/* ── SIDEBARS ── */}
-      <HistorySidebar isOpen={isHistoryOpen} onClose={() => setIsHistoryOpen(false)} history={actionHistory} />
-      <LinksSidebar isOpen={isLinksOpen} onClose={() => setIsLinksOpen(false)} links={config.quickLinks || []} onCopy={copyToClipboard} onManage={() => { setIsLinksOpen(false); setIsConfigOpen(true); }} />
-
-      {/* ── NOVOS MODAIS ── */}
-      <ReminderModal
-        client={reminderClient}
-        defaultTime={config.defaultTime || '20:00'}
-        onClose={() => setReminderClient(null)}
-        onConfirm={handleAddReminder}
-      />
-      <DatabaseModal
-        isOpen={isDatabaseOpen}
-        onClose={() => setIsDatabaseOpen(false)}
-        clients={clientDatabase}
-        onLoad={handleLoadFromDatabase}
-        onRemove={handleRemoveFromDatabase}
-        onClearAll={handleClearDatabase}
-      />
 
       {/* ── MODAIS ── */}
-      <ConfigModal isOpen={isConfigOpen} onClose={() => setIsConfigOpen(false)} config={config} onSave={handleSaveConfig} />
+      <ImportModal
+        open={isImportOpen}
+        value={inputData}
+        onChange={setInputData}
+        onImport={text => setInputData(prev => mergeImport(prev, text))}
+        onClear={() => { setInputData(''); setResults([]); setFlatResults([]); setResultTitle(''); setPeriod(null); }}
+        onProcess={handleProcessFromImport}
+        onClose={() => setIsImportOpen(false)}
+        onToast={addToast}
+      />
       <EditClientModal isOpen={!!editingClient} onClose={() => setEditingClient(null)} client={editingClient} config={config} onSave={handleEditSave} />
-      <ReceiptModal isOpen={!!receiptClient} onClose={() => setReceiptClient(null)} client={receiptClient} config={config} onConfirm={handleSendReceipt} />
+      <PaymentModal
+        client={payingClient}
+        config={config}
+        canSendReceipt={!!payingClient && !!whatsappOf(payingClient)}
+        onClose={() => setPayingClient(null)}
+        onConfirm={handleConfirmPayment}
+      />
       <LinkClientsModal isOpen={!!linkingClient} onClose={() => setLinkingClient(null)} masterClient={linkingClient} allClients={flatResults} onSave={handleSaveLinks} />
+      <ClientProfile
+        name={profileName}
+        stored={profileStored}
+        config={config}
+        payments={payments}
+        history={actionHistory}
+        risk={profileName ? risks.get(profileName.toLowerCase()) : undefined}
+        tagIds={(profileName && clientTags[profileName]) || []}
+        note={(profileName && customNotes[profileName]) || ''}
+        phone={(profileName && phoneOverrides[profileName]) || (profileStored ? extractPhone(profileStored.rawNotes).original : '')}
+        linked={(profileName && clientLinks[profileName]) || []}
+        onClose={() => setProfileName(null)}
+        onPay={() => fromProfile(setPayingClient)}
+        onRemind={() => fromProfile(setReminderClient)}
+        onEdit={() => fromProfile(setEditingClient)}
+      />
+      <ReminderModal client={reminderClient} defaultTime={config.defaultTime || '20:00'} onClose={() => setReminderClient(null)} onConfirm={handleAddReminder} />
 
-      {/* Relatório de Inválidos */}
-      {showInvalidReport && invalidClients.length > 0 && (
-        <div className="fixed inset-0 z-[55] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-md w-full max-h-[80vh] flex flex-col border border-gray-200 dark:border-slate-700">
-            <div className="p-5 border-b border-gray-200 dark:border-slate-700 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-red-500/10 rounded-xl"><AlertOctagon className="text-red-400" size={18} /></div>
-                <div>
-                  <h2 className="text-sm font-bold text-gray-900 dark:text-white">Envio Manual Necessário</h2>
-                  <p className="text-xs text-gray-500 dark:text-slate-400">{invalidClients.length} cliente(s) com número inválido</p>
-                </div>
-              </div>
-              <button onClick={() => setShowInvalidReport(false)} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 dark:text-slate-500"><X size={16} /></button>
+      <Modal
+        open={showInvalidReport && invalidClients.length > 0}
+        onClose={() => setShowInvalidReport(false)}
+        title="Envio manual necessário"
+        subtitle={`${invalidClients.length} cliente(s) com número inválido`}
+        icon={AlertOctagon}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setShowInvalidReport(false)}>Fechar</Button>
+            <Button variant="primary" icon={Copy} onClick={() => copyToClipboard(`ENVIO MANUAL NECESSÁRIO:\n${invalidClients.map(c => `- ${c.name} | ${c.phone} (${c.reason})`).join('\n')}`)}>Copiar lista</Button>
+          </>
+        }
+      >
+        <div className="border border-line rounded-md divide-y divide-line">
+          {invalidClients.map((c, i) => (
+            <div key={`${c.name}-${i}`} className="px-3 py-2.5">
+              <p className="text-sm font-medium text-ink truncate">{c.name}</p>
+              <p className="text-xs text-muted font-mono">{c.phone} <span className="text-danger">({c.reason})</span></p>
             </div>
-            <div className="overflow-y-auto p-4 space-y-2 flex-1">
-              {invalidClients.map((c, idx) => (
-                <div key={`${c.name}-${idx}`} className="p-3 bg-red-50 dark:bg-red-500/5 rounded-lg border border-red-200 dark:border-red-900/30">
-                  <p className="font-semibold text-sm text-gray-900 dark:text-white truncate">{c.name}</p>
-                  <p className="text-xs text-gray-500 dark:text-slate-400 font-mono">{c.phone} <span className="text-red-600 dark:text-red-400">({c.reason})</span></p>
-                </div>
-              ))}
-            </div>
-            <div className="p-4 border-t border-gray-200 dark:border-slate-700 flex gap-2">
-              <button onClick={() => { const text = invalidClients.map(c => `- ${c.name} | ${c.phone} (${c.reason})`).join('\n'); copyToClipboard(`⚠️ ENVIO MANUAL NECESSÁRIO:\n${text}`); }} className="flex-1 flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-600 text-white py-2 px-4 rounded-lg text-sm font-semibold transition-all">
-                <Copy size={13} /> Copiar lista
-              </button>
-              <button onClick={() => setShowInvalidReport(false)} className="px-4 py-2 rounded-lg border border-gray-300 dark:border-slate-600 text-sm text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-700 transition-all">Fechar</button>
-            </div>
-          </div>
+          ))}
         </div>
-      )}
+      </Modal>
 
       {/* ── TOASTS ── */}
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] flex flex-col gap-2 pointer-events-none">
-        {toasts.map(t => (
-          <div key={t.id} className={`pointer-events-auto flex items-center gap-2 px-4 py-2 rounded-full shadow-xl text-white text-sm font-medium animate-bounce-in ${t.type === 'success' ? 'bg-emerald-600' : t.type === 'error' ? 'bg-red-600' : t.type === 'warning' ? 'bg-amber-600' : 'bg-gray-700'}`}>
-            {t.text}
-          </div>
-        ))}
+      <div className="fixed bottom-5 right-5 left-5 sm:left-auto z-[70] flex flex-col items-end gap-2 pointer-events-none">
+        {toasts.map(t => {
+          const st = TOAST_STYLE[t.type];
+          return (
+            <div key={t.id} className="pointer-events-auto flex items-stretch bg-card border border-line rounded-md shadow-pop overflow-hidden animate-bounce-in max-w-sm w-full sm:w-auto">
+              <span className={cx('w-1 flex-shrink-0', st.bar)} />
+              <div className="flex items-center gap-2.5 px-3.5 py-2.5 text-sm text-ink">
+                <st.icon size={16} className={cx('flex-shrink-0', st.bar.replace('bg-', 'text-'))} />
+                {t.text}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

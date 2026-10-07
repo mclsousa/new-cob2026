@@ -1,9 +1,13 @@
 // Auto-teste da lógica crítica. Rodar: npm run check
 import assert from 'node:assert/strict';
-import { parseClientData, normalizeCsvIfNeeded, detectInputType } from '../utils/parser';
-import { toWhatsappNumber, applyAntiBan, processSpinSyntax, extractPhone } from '../utils/helpers';
+import { parseClientData, normalizeCsvIfNeeded, detectInputType, mergeImport } from '../utils/parser';
+import { toWhatsappNumber, processSpinSyntax, extractPhone } from '../utils/helpers';
 import { buildPixPayload, crc16, normalizePixKey } from '../utils/pix';
+import { addMonthsClamped, dueStatus, monthsFromLabel, lastPaymentByName, isRecentlyPaid, forecastRevenue, riskByName, dailySummary, dailyMessage, DEFAULT_NOTIFY } from '../utils/billing';
+import { DEFAULT_CONFIG } from '../constants';
 import * as syncApi from '../api/sync';
+import * as dailyApi from '../api/daily';
+import * as pushApi from '../api/push';
 
 const parse = (raw: string) => {
   const t = normalizeCsvIfNeeded(raw);
@@ -45,12 +49,55 @@ assert.equal(mixed.find(c => c.name === 'ana')?.type, 'p2p');
 assert.equal(toWhatsappNumber(extractPhone('completo 21 99979 4635').whatsapp), '5521999794635');
 assert.equal(toWhatsappNumber('5547991495407'), '5547991495407');
 
-// Anti-ban não corrompe chave PIX nem links
-const msg = 'Chave PIX: tec.br@hotmail.com https://wa.me/5521999794635';
-for (let i = 0; i < 50; i++) {
-  const out = applyAntiBan(msg);
-  assert.ok(out.includes('tec.br@hotmail.com') && out.includes('https://wa.me/5521999794635'));
-}
+// Regras de cobrança: renovação não estoura fim do mês; status por dias até o vencimento
+const now = new Date(2026, 9, 7, 15);
+assert.equal(addMonthsClamped(new Date(2026, 0, 31), 1).getDate(), 28);
+assert.equal(addMonthsClamped(new Date(2026, 10, 15), 3).getFullYear(), 2027);
+assert.equal(dueStatus(new Date(2026, 9, 6), now).level, 'overdue');
+assert.equal(dueStatus(new Date(2026, 9, 7, 23), now).level, 'today');
+assert.equal(dueStatus(new Date(2026, 9, 8), now).level, 'tomorrow');
+assert.equal(dueStatus(new Date(2026, 9, 20), now).level, 'active');
+assert.equal(monthsFromLabel('3 Meses (2 Telas)'), 3);
+const pays = [{ id: '1', clientId: 'a', clientName: 'Ana', amount: 35, paidAt: 1, newDueDate: '' }, { id: '2', clientId: 'a', clientName: 'ana', amount: 70, paidAt: 2, newDueDate: '' }];
+assert.equal(lastPaymentByName(pays).get('ana')?.amount, 70);
+assert.ok(!isRecentlyPaid(pays[1]));
+
+// Previsão: último pagamento do cliente, senão 1º plano; dependente não conta
+const day = (n: number) => new Date(2026, 9, 7 + n, 12).toISOString();
+const stored = (name: string, n: number) => ({ id: name, name, dueDate: day(n), rawNotes: '', originalLine: '', type: 'iptv' as const, savedAt: 0 });
+const base = [stored('Ana', 2), stored('Bia', 5), stored('Caio', 20), stored('Dep', 3), stored('Velho', -3)];
+const f7 = forecastRevenue(base, pays, DEFAULT_CONFIG, { Bia: ['Dep'] }, 0, 7, now);
+assert.deepEqual(f7, { amount: 70 + 60, count: 2 }); // Ana pagou 70; Bia titular de 2 telas = 60
+assert.equal(forecastRevenue(base, pays, DEFAULT_CONFIG, {}, 0, 30, now).count, 4);
+assert.equal(forecastRevenue(base, pays, DEFAULT_CONFIG, {}, -30, 0, now).count, 1);
+
+// Risco: 2 cobranças em dias diferentes sem pagamento depois; ou 2 pagamentos atrasados
+const send = (name: string, ts: number) => ({ clientId: name, clientName: name, timestamp: ts, action: 'whatsapp' as const });
+const D = 24 * 3600e3;
+const risk = riskByName(
+  [{ id: 'p', clientId: 'x', clientName: 'Leo', amount: 35, paidAt: 5 * D, newDueDate: '', prevDueDate: new Date(2 * D).toISOString() },
+   { id: 'q', clientId: 'x', clientName: 'Leo', amount: 35, paidAt: 40 * D, newDueDate: '', prevDueDate: new Date(35 * D).toISOString() }],
+  [send('Rui', 10 * D), send('Rui', 10 * D + 60e3), send('Rui', 12 * D), send('Ivo', 10 * D), send('Leo', 1 * D), send('Leo', 3 * D)],
+);
+assert.equal(risk.get('rui')?.unanswered, 2);
+assert.ok(!risk.has('ivo'));
+assert.equal(risk.get('leo')?.late, 2);
+assert.equal(risk.get('leo')?.unanswered, 0); // cobranças antes do último pagamento não contam
+
+// Resumo da manhã
+assert.deepEqual(dailySummary([stored('a', 0), stored('b', 1), stored('c', -4), stored('d', -5), stored('e', -6)], now), { today: 1, tomorrow: 1, overdue: 2 });
+const msg = dailyMessage({ today: 2, tomorrow: 1, overdue: 3, risk: 4 }, { ...DEFAULT_NOTIFY, includeOverdue: false, includeRisk: true });
+assert.equal(msg.title, 'Bom dia! 2 cobrança(s) para hoje'); // sem vencidos no total
+assert.equal(msg.body, '2 vencem hoje · 1 vencem amanhã · 4 em risco');
+
+// Importar substitui o arquivo do mesmo tipo e mantém o outro
+const iptvA = ['Clientes IPTV', '1 joao01 x'].join('\n');
+const iptvB = ['Clientes IPTV', '2 maria02 y'].join('\n');
+const p2p = ['Clientes P2P', '3 ze03 z'].join('\n');
+const sep = '\n\n';
+assert.equal(mergeImport(iptvA + sep + p2p, iptvB), p2p + sep + iptvB);
+assert.equal(mergeImport(iptvA + sep + p2p, 'texto livre'), 'texto livre');
+assert.equal(mergeImport('', iptvA), iptvA);
 
 // Spin só sorteia blocos com "|"
 assert.equal(processSpinSyntax('{pix} {plano1}'), '{pix} {plano1}');
@@ -70,9 +117,6 @@ assert.equal(normalizePixKey('(21) 99979-4635'), '+5521999794635');
 assert.equal(normalizePixKey('123.456.789-09'), '12345678909');
 assert.equal(normalizePixKey('+55 21 99979-4635'), '+5521999794635');
 
-// Anti-ban não toca na linha do PIX copia e cola (qualquer byte a mais quebra o CRC)
-for (let i = 0; i < 50; i++) assert.ok(applyAntiBan(`Pague com:\n${brcode}\nObrigado a todos`).includes(brcode));
-
 // /api/sync com Redis falso em memória (REST do Upstash: POST com o comando em JSON)
 const db = new Map<string, string>();
 process.env.KV_REST_API_URL = 'http://redis.test';
@@ -84,6 +128,7 @@ globalThis.fetch = (async (_url: string, init: RequestInit) => {
   if (cmd === 'GET') result = db.get(key) ?? null;
   else if (cmd === 'SET') db.set(key, val);
   else if (cmd === 'INCR') { result = Number(db.get(key) || 0) + 1; db.set(key, String(result)); }
+  else if (cmd === 'HVALS') result = [];
   return new Response(JSON.stringify({ result }));
 }) as typeof fetch;
 
@@ -109,5 +154,19 @@ const req = (method: string, pass: string, body?: unknown, ip = '1.1.1.1') =>
   for (let i = 0; i < 10; i++) await syncApi.GET(req('GET', 'x', undefined, `6.6.6.${i}, 9.9.9.9`));
   assert.equal((await syncApi.GET(req('GET', 'segredo', undefined, '7.7.7.7, 9.9.9.9'))).status, 429);
   assert.equal((await syncApi.GET(req('GET', 'segredo', undefined, '1.1.1.1'))).status, 200);
+  // Resumo diário: só a Vercel Cron (CRON_SECRET) chama; sem aparelhos inscritos envia 0
+  process.env.CRON_SECRET = 'cron';
+  assert.equal((await dailyApi.GET(new Request('http://x/api/daily'))).status, 401);
+  const daily = await (await dailyApi.GET(new Request('http://x/api/daily?force=1', { headers: { authorization: 'Bearer cron' } }))).json();
+  assert.deepEqual(daily.daily, { today: 0, tomorrow: 0, overdue: 0, sent: 0 });
+  assert.equal(daily.reminders, 0);
+  // App Android (https://localhost) pode chamar a API: pré-verificação CORS e cabeçalho nas respostas
+  const pre = syncApi.OPTIONS();
+  assert.equal(pre.status, 204);
+  assert.equal(pre.headers.get('access-control-allow-origin'), 'https://localhost');
+  assert.match(pre.headers.get('access-control-allow-headers') || '', /authorization/);
+  assert.equal((await syncApi.GET(req('GET', 'segredo'))).headers.get('access-control-allow-origin'), 'https://localhost');
+  // Push sem chaves VAPID: responde claramente em vez de quebrar
+  assert.equal((await pushApi.GET()).status, 503);
   console.log('selfcheck ok');
 })();

@@ -39,7 +39,6 @@ Seu acesso está liberado. 😃👍`;
 export const DEFAULT_CONFIG: AppConfig = {
   pixKey: 'tec.br@hotmail.com',
   defaultTime: '20:00', // Default business rule time
-  antiBanMode: false, // Default off
   priceLineFormat: '{nome} - R$ {valor}', // Default format
   plansTitle: 'TABELA DE PLANOS', // Default title
   plans: [
@@ -76,11 +75,6 @@ export const DEFAULT_CONFIG: AppConfig = {
             { id: '3t_p3', label: '3 Meses (3 Telas)', price: 250 },
         ]
     }
-  ],
-  quickLinks: [
-    { id: 'l1', label: 'App Android', url: 'https://bit.ly/exemplo-app' },
-    { id: 'l2', label: 'App iOS', url: 'https://bit.ly/exemplo-ios' },
-    { id: 'l3', label: 'Tutorial de Instalação', url: 'https://youtube.com/...' },
   ],
   templates: {
     normal: DEFAULT_TEMPLATE_NORMAL,
