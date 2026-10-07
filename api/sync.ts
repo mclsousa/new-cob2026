@@ -9,6 +9,8 @@ const STATE_KEY = 'tvbrcob:sync:state';
 const MAX_BODY_BYTES = 4 * 1024 * 1024;
 const MAX_FAILS = 10;
 const FAIL_WINDOW_S = 15 * 60;
+const MAX_GLOBAL_FAILS = 300;
+const GLOBAL_FAIL_KEY = 'tvbrcob:sync:fail:global';
 
 interface SyncState {
   updatedAt: number;
@@ -38,8 +40,13 @@ const redis = async <T = unknown>(...command: (string | number)[]): Promise<T> =
 
 const sha256 = (s: string) => createHash('sha256').update(s).digest();
 
+// IP definido pela borda da Vercel. O 1º item do X-Forwarded-For vem do cliente e pode ser forjado
+// para escapar do bloqueio; como último recurso usa o item mais à direita (o que o proxy anexou).
 const clientIp = (req: Request) =>
-  (req.headers.get('x-forwarded-for') || '').split(',')[0].trim() || req.headers.get('x-real-ip') || 'unknown';
+  req.headers.get('x-real-ip') ||
+  req.headers.get('x-vercel-forwarded-for') ||
+  (req.headers.get('x-forwarded-for') || '').split(',').map(s => s.trim()).filter(Boolean).pop() ||
+  'unknown';
 
 // null = autorizado; senão a Response de erro
 const authorize = async (req: Request): Promise<Response | null> => {
@@ -48,13 +55,20 @@ const authorize = async (req: Request): Promise<Response | null> => {
 
   const failKey = `tvbrcob:sync:fail:${clientIp(req)}`;
   const fails = Number((await redis<string | null>('GET', failKey)) || 0);
-  if (fails >= MAX_FAILS) return json({ error: 'Muitas tentativas. Tente de novo em 15 minutos.' }, 429);
+  // Freio global contra ataque distribuído (muitos IPs). ponytail: um atacante pode travar o dono
+  // por 15 min gastando 300 tentativas; aceitável com senha aleatória longa.
+  const globalFails = Number((await redis<string | null>('GET', GLOBAL_FAIL_KEY)) || 0);
+  if (fails >= MAX_FAILS || globalFails >= MAX_GLOBAL_FAILS) {
+    return json({ error: 'Muitas tentativas. Tente de novo em 15 minutos.' }, 429);
+  }
 
   const given = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
   if (given && timingSafeEqual(sha256(given), sha256(password))) return null;
 
-  await redis('INCR', failKey);
-  await redis('EXPIRE', failKey, FAIL_WINDOW_S);
+  for (const key of [failKey, GLOBAL_FAIL_KEY]) {
+    await redis('INCR', key);
+    await redis('EXPIRE', key, FAIL_WINDOW_S);
+  }
   return json({ error: 'Senha incorreta' }, 401);
 };
 

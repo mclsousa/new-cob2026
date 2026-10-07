@@ -104,8 +104,10 @@ const req = (method: string, pass: string, body?: unknown, ip = '1.1.1.1') =>
   // base antiga = outro aparelho salvou depois -> 409 com o estado atual
   assert.equal((await syncApi.PUT(req('PUT', 'segredo', { data: {}, baseUpdatedAt: updatedAt - 1 }))).status, 409);
   assert.equal((await syncApi.PUT(req('PUT', 'segredo', { data: { customNotes: 1 } }))).status, 400);
-  // 10 senhas erradas bloqueiam o IP, mesmo depois com a senha certa
-  for (let i = 0; i < 10; i++) await syncApi.GET(req('GET', 'x', undefined, '9.9.9.9'));
-  assert.equal((await syncApi.GET(req('GET', 'segredo', undefined, '9.9.9.9'))).status, 429);
+  // 10 senhas erradas bloqueiam o IP, mesmo depois com a senha certa — e forjar o
+  // início do X-Forwarded-For não escapa (vale o item que o proxy anexou, à direita)
+  for (let i = 0; i < 10; i++) await syncApi.GET(req('GET', 'x', undefined, `6.6.6.${i}, 9.9.9.9`));
+  assert.equal((await syncApi.GET(req('GET', 'segredo', undefined, '7.7.7.7, 9.9.9.9'))).status, 429);
+  assert.equal((await syncApi.GET(req('GET', 'segredo', undefined, '1.1.1.1'))).status, 200);
   console.log('selfcheck ok');
 })();
