@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "br.tvbr.cob",
+      "sha256_cert_fingerprints": [
+        "2A:DE:5B:3B:2A:95:11:FB:E7:05:0D:0E:10:E5:A3:3C:32:E1:B9:58:FC:ED:5A:9A:03:9A:4C:7B:07:F1:79:7E"
+      ]
+    }
+  }
+]

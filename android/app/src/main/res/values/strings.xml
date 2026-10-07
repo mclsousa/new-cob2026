@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="appName">TVBR.Cob</string>
+    <string name="hostName">new-cob2026.vercel.app</string>
+    <string name="launchUrl">https://new-cob2026.vercel.app/</string>
+    <string name="assetStatements" translatable="false">
+        [{ \"relation\": [\"delegate_permission/common.handle_all_urls\"],
+           \"target\": { \"namespace\": \"web\", \"site\": \"https://new-cob2026.vercel.app\" } }]
+    </string>
+</resources>

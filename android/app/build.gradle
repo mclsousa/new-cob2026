@@ -1,0 +1,45 @@
+// APK TWA (Trusted Web Activity): abre https://new-cob2026.vercel.app em tela cheia pelo Chrome.
+// O app web se atualiza a cada deploy; este APK só precisa ser refeito para mudar ícone/nome/URL.
+// Assinatura via variáveis de ambiente (GitHub Actions): KEYSTORE_PATH, KEYSTORE_PASSWORD.
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'br.tvbr.cob'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'br.tvbr.cob'
+        minSdk 21
+        targetSdk 35
+        // run_number do GitHub Actions: cada build novo instala por cima do anterior
+        versionCode Integer.parseInt(System.getenv('VERSION_CODE') ?: '1')
+        versionName "1.0.${System.getenv('VERSION_CODE') ?: '1'}"
+    }
+
+    signingConfigs {
+        release {
+            storeFile file(System.getenv('KEYSTORE_PATH') ?: 'release.jks')
+            storePassword System.getenv('KEYSTORE_PASSWORD')
+            keyAlias 'tvbrcob'
+            keyPassword System.getenv('KEYSTORE_PASSWORD')
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.release
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.5.0'
+}
