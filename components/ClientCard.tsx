@@ -243,11 +243,15 @@ const ClientCard: React.FC<ClientCardProps> = ({
   // Etiquetas no mesmo formato (pílula de mesma altura): situação do envio + etiquetas do cliente
   const chips = [
     isPaid && <Chip key="paid" className="bg-ok text-white"><Wallet size={11} /> Pago</Chip>,
-    isSent && !isPaid && <Chip key="sent" className="bg-ok/15 text-ok"><CheckCircle size={11} /> Enviado</Chip>,
     hasReminder && <Chip key="rem" className="bg-brand-soft text-brand"><Bell size={11} /> Lembrete</Chip>,
     risk && <Chip key="risk" className="bg-danger text-white" title={risk.reasons.join(' · ')}><AlertTriangle size={11} /> Em risco</Chip>,
     ...activeTags.map(tag => <Chip key={tag.id} style={tagStyle(tag.color)}>{tag.label}</Chip>),
   ].filter(Boolean);
+  const sentMark = isSent && !isPaid && (
+    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-ok whitespace-nowrap">
+      <CheckCircle size={12} /> Enviado
+    </span>
+  );
   const chipsRow = (center?: boolean) => chips.length > 0 && (
     <div className={cx('flex flex-wrap gap-1.5', center && 'justify-center')}>{chips}</div>
   );
@@ -302,6 +306,7 @@ const ClientCard: React.FC<ClientCardProps> = ({
           <div className="hidden md:flex items-center gap-1.5 min-w-0 overflow-hidden">{chips}</div>
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">
+          {sentMark}
           {whatsappIconButton(15)}
           <Menu items={[payItem, ...menuItems]} />
         </div>
@@ -313,7 +318,7 @@ const ClientCard: React.FC<ClientCardProps> = ({
   if (isCollapsed && !isFocusMode) {
     return (
       <div ref={rootRef} className={cx('bg-card rounded-md border border-line/60 shadow-card transition-colors hover:border-brand/30 scroll-mt-4', (isSent || isPaid) && 'opacity-70')}>
-        <div className="flex items-center gap-3 px-4 py-3 cursor-pointer select-none" onClick={() => setIsCollapsed(false)}>
+        <div className="flex items-stretch gap-3 px-4 py-3 cursor-pointer select-none" onClick={() => setIsCollapsed(false)}>
           <span className="w-1 self-stretch rounded-full flex-shrink-0" style={{ backgroundColor: status.color }} />
           <div className="flex-1 min-w-0 space-y-1.5">
             <p className="text-[15px] font-medium text-ink leading-snug break-words"><HighlightedText text={client.name} query={searchQuery} /> <TypeTag type={client.type} /></p>
@@ -326,10 +331,13 @@ const ClientCard: React.FC<ClientCardProps> = ({
               </p>
             )}
           </div>
-          <div className="flex items-center gap-1 flex-shrink-0" onClick={e => e.stopPropagation()}>
-            {whatsappIconButton(18)}
-            <Menu items={[payItem, ...menuItems]} />
-            <ChevronDown size={15} className="text-muted ml-1 hidden sm:block" />
+          <div className="flex flex-col items-end justify-between gap-1 flex-shrink-0">
+            <div className="min-h-[16px]">{sentMark}</div>
+            <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+              {whatsappIconButton(18)}
+              <Menu items={[payItem, ...menuItems]} />
+              <ChevronDown size={15} className="text-muted ml-1 hidden sm:block" />
+            </div>
           </div>
         </div>
       </div>
@@ -346,11 +354,15 @@ const ClientCard: React.FC<ClientCardProps> = ({
             {metaLine()}
             {chipsRow()}
           </div>
-          <ChevronUp size={16} className="text-muted flex-shrink-0 mt-0.5" />
+          <div className="flex items-center gap-2 flex-shrink-0 mt-0.5">
+            {sentMark}
+            <ChevronUp size={16} className="text-muted" />
+          </div>
         </div>
       )}
 
       <div className={cx('flex-1 flex flex-col min-h-0 overflow-y-auto', isFocusMode ? 'p-4 sm:p-8' : 'p-4')}>
+        {isFocusMode && sentMark && <div className="flex justify-end -mt-1 mb-1">{sentMark}</div>}
         {isFocusMode && (
           <div className="mb-5 text-center">
             <h2 className="text-xl sm:text-2xl font-medium text-ink break-words">{client.name} <TypeTag type={client.type} /></h2>
