@@ -4,7 +4,7 @@ import { buildPixPayload } from '../utils/pix';
 import { extractPhone, formatDate, processSpinSyntax, extractCredentials, toWhatsappNumber } from '../utils/helpers';
 import { dueStatus, Risk } from '../utils/billing';
 import { openExternal } from '../utils/native';
-import { Copy, Phone, Edit, User, CheckCircle, ChevronDown, ChevronUp, PenTool, ListChecks, Link as LinkIcon, Lock, Key, Bell, Wallet, StickyNote, Info, UserRound, AlertTriangle, CircleDollarSign } from 'lucide-react';
+import { Copy, Phone, Edit, User, CheckCircle, ChevronDown, ChevronUp, PenTool, ListChecks, Link as LinkIcon, Lock, Key, Bell, Wallet, StickyNote, Info, UserRound, AlertTriangle, CircleDollarSign, CalendarDays } from 'lucide-react';
 import { Button, Menu, MenuItem, cx, tagStyle } from './ui';
 
 interface ClientCardProps {
@@ -35,9 +35,7 @@ export const WhatsappIcon = ({ size = 16, className }: { size?: number; classNam
 
 // Sigla do tipo da conta (visão em lista): IPTV (roxo) ou P2P (verde-água)
 const TypeTag = ({ type }: { type: ParsedClient['type'] }) => (
-  <span className={cx('text-[10px] font-bold tracking-wide flex-shrink-0', type === 'p2p' ? 'text-ok' : 'text-brand')}>
-    {type === 'p2p' ? 'P2P' : 'IPTV'}
-  </span>
+  <span className="text-[10px] font-medium tracking-wider text-muted flex-shrink-0">{type === 'p2p' ? 'P2P' : 'IPTV'}</span>
 );
 
 // Pílula padrão das etiquetas (mesma altura e respiro em todas)
@@ -46,8 +44,6 @@ const Chip = ({ children, className, style, title }: { children: React.ReactNode
     {children}
   </span>
 );
-
-const Dot = () => <span className="text-muted/50" aria-hidden="true">•</span>;
 
 // Cor do texto do status (âmbar mais escuro que o da barra para ler bem no fundo branco)
 const STATUS_TEXT: Record<string, string> = {
@@ -234,6 +230,7 @@ const ClientCard: React.FC<ClientCardProps> = ({
   };
 
 
+  const payItem: MenuItem = { label: 'Registrar pagamento', icon: CircleDollarSign, onClick: () => onPay(client) };
   const menuItems: MenuItem[] = [
     { label: 'Ver ficha do cliente', icon: UserRound, onClick: () => onOpenProfile(client) },
     { label: 'Editar cliente', icon: Edit, onClick: () => onEdit(client) },
@@ -256,15 +253,22 @@ const ClientCard: React.FC<ClientCardProps> = ({
   );
 
   // Linha de informação em texto: IPTV · Amanhã · 09/10/2026 (sem caixinhas)
+  const due = new Date(client.dueDate);
+  const weekday = due.toLocaleDateString('pt-BR', { weekday: 'long' }).replace('-feira', '');
+  const dueDay = `${String(due.getDate()).padStart(2, '0')}/${String(due.getMonth() + 1).padStart(2, '0')}${due.getFullYear() !== new Date().getFullYear() ? `/${due.getFullYear()}` : ''}`;
   const metaLine = (center?: boolean) => (
-    <div className={cx('flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs', center && 'justify-center')}>
-      <span className={cx('font-bold tracking-wide', client.type === 'p2p' ? 'text-ok' : 'text-brand')}>{client.type === 'p2p' ? 'P2P' : 'IPTV'}</span>
-      <Dot />
-      <span className={cx('font-semibold', STATUS_TEXT[status.level])}>{status.label}</span>
-      <Dot />
-      <span className="text-muted">{formatDate(client.dueDate)}</span>
-      {hasLinkedClients && <><Dot /><span className="text-info font-medium">+{client.linked!.length} vinculada(s)</span></>}
-      {isCustomMessage && <><Dot /><span className="text-brand inline-flex items-center gap-0.5"><PenTool size={10} /> Personalizada</span></>}
+    <div className={cx('flex flex-wrap items-center gap-x-2 gap-y-1 text-xs', center && 'justify-center')}>
+      <span
+        className={cx('inline-flex items-center gap-1.5 h-6 px-2 rounded-md font-semibold whitespace-nowrap', STATUS_TEXT[status.level])}
+        style={{ backgroundColor: `${status.color}1F` }}
+      >
+        <CalendarDays size={13} className="flex-shrink-0" />
+        {status.label}
+        <span className="opacity-40">·</span>
+        <span className="capitalize">{weekday}</span>, {dueDay}
+      </span>
+      {hasLinkedClients && <span className="text-info font-medium">+{client.linked!.length} vinculada(s)</span>}
+      {isCustomMessage && <span className="text-brand inline-flex items-center gap-0.5"><PenTool size={10} /> Personalizada</span>}
     </div>
   );
 
@@ -277,12 +281,6 @@ const ClientCard: React.FC<ClientCardProps> = ({
         {templates.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
       </select>
     </label>
-  );
-
-  const payIconButton = (size: number) => (
-    <button onClick={() => onPay(client)} title="Registrar pagamento" aria-label="Registrar pagamento" className="p-2 rounded-md text-ok hover:bg-ok/10">
-      <CircleDollarSign size={size} />
-    </button>
   );
 
   const whatsappIconButton = (size: number) => (
@@ -306,8 +304,10 @@ const ClientCard: React.FC<ClientCardProps> = ({
           <div className="text-xs text-muted font-mono truncate hidden md:block">{displayPhone || '—'}</div>
           <div className="hidden md:flex items-center gap-1.5 min-w-0 overflow-hidden">{chips}</div>
         </div>
-        {payIconButton(16)}
-        {whatsappIconButton(15)}
+        <div className="flex items-center gap-1 flex-shrink-0">
+          {whatsappIconButton(15)}
+          <Menu items={[payItem, ...menuItems]} />
+        </div>
       </div>
     );
   }
@@ -319,7 +319,7 @@ const ClientCard: React.FC<ClientCardProps> = ({
         <div className="flex items-center gap-3 px-4 py-3 cursor-pointer select-none" onClick={() => setIsCollapsed(false)}>
           <span className="w-1 self-stretch rounded-full flex-shrink-0" style={{ backgroundColor: status.color }} />
           <div className="flex-1 min-w-0 space-y-1.5">
-            <p className="text-[15px] font-medium text-ink leading-snug break-words"><HighlightedText text={client.name} query={searchQuery} /></p>
+            <p className="text-[15px] font-medium text-ink leading-snug break-words"><HighlightedText text={client.name} query={searchQuery} /> <TypeTag type={client.type} /></p>
             {metaLine()}
             {chipsRow()}
             {client.customNotes && (
@@ -330,9 +330,8 @@ const ClientCard: React.FC<ClientCardProps> = ({
             )}
           </div>
           <div className="flex items-center gap-1 flex-shrink-0" onClick={e => e.stopPropagation()}>
-            {payIconButton(18)}
             {whatsappIconButton(18)}
-            <Menu items={menuItems} />
+            <Menu items={[payItem, ...menuItems]} />
             <ChevronDown size={15} className="text-muted ml-1 hidden sm:block" />
           </div>
         </div>
@@ -346,7 +345,7 @@ const ClientCard: React.FC<ClientCardProps> = ({
       {!isFocusMode && (
         <div className="flex items-start justify-between gap-3 px-4 py-3 border-b border-line cursor-pointer select-none" onClick={collapse}>
           <div className="min-w-0 space-y-1.5">
-            <p className="text-[15px] font-medium text-ink leading-snug break-words">{client.name}</p>
+            <p className="text-[15px] font-medium text-ink leading-snug break-words">{client.name} <TypeTag type={client.type} /></p>
             {metaLine()}
             {chipsRow()}
           </div>
@@ -357,7 +356,7 @@ const ClientCard: React.FC<ClientCardProps> = ({
       <div className={cx('flex-1 flex flex-col min-h-0 overflow-y-auto', isFocusMode ? 'p-4 sm:p-8' : 'p-4')}>
         {isFocusMode && (
           <div className="mb-5 text-center">
-            <h2 className="text-xl sm:text-2xl font-medium text-ink break-words">{client.name}</h2>
+            <h2 className="text-xl sm:text-2xl font-medium text-ink break-words">{client.name} <TypeTag type={client.type} /></h2>
             <div className="mt-2 space-y-2">
               {metaLine(true)}
               {chipsRow(true)}
