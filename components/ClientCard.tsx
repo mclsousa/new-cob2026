@@ -275,7 +275,12 @@ const ClientCard: React.FC<ClientCardProps> = ({
   // --- RECOLHIDO ---
   if (isCollapsed && !isFocusMode) {
     return (
-      <div ref={rootRef} className={cx('bg-card rounded-md border border-line/60 shadow-card transition-colors hover:border-brand/30 scroll-mt-4', (isSent || isPaid) && 'opacity-70')}>
+      <div ref={rootRef} className={cx(
+        'rounded-md border shadow-card transition-colors scroll-mt-4',
+        // Com observação privada o card fechado fica âmbar, para chamar atenção na lista
+        client.customNotes ? 'bg-warn/15 border-warn/50 hover:border-warn' : 'bg-card border-line/60 hover:border-brand/30',
+        (isSent || isPaid) && 'opacity-70',
+      )}>
         <div className="flex items-center gap-3 px-4 py-3 cursor-pointer select-none" onClick={() => setIsCollapsed(false)}>
           <span className="w-1 self-stretch rounded-full flex-shrink-0" style={{ backgroundColor: status.color }} />
           <div className="flex-1 min-w-0">
@@ -291,7 +296,7 @@ const ClientCard: React.FC<ClientCardProps> = ({
               {tagChips}
             </div>
             {client.customNotes && (
-              <p className="mt-1.5 flex items-start gap-1.5 text-xs font-medium text-ink bg-warn/15 border-l-2 border-warn rounded-r px-2 py-1">
+              <p className="mt-1.5 flex items-start gap-1.5 text-xs font-medium text-ink">
                 <StickyNote size={12} className="text-warn flex-shrink-0 mt-px" />
                 <span className="min-w-0 break-words"><HighlightedText text={client.customNotes} query={searchQuery} /></span>
               </p>
