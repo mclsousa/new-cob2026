@@ -1,6 +1,7 @@
 // Componentes base do design system (referência Dataviz).
 // Cores de superfície/texto: canvas, card, subtle, line, ink, muted (trocam no modo escuro).
 import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X, MoreHorizontal, Info, LucideIcon } from 'lucide-react';
 
 export const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(' ');
@@ -224,6 +225,7 @@ export const Menu = ({ items, align = 'right', trigger }: { items: MenuItem[]; a
   const [pos, setPos] = useState<{ top?: number; bottom?: number; left: number } | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const toggle = () => {
     if (pos) return setPos(null);
@@ -237,7 +239,10 @@ export const Menu = ({ items, align = 'right', trigger }: { items: MenuItem[]; a
 
   useEffect(() => {
     if (!pos) return;
-    const close = (e: Event) => { if (!ref.current?.contains(e.target as Node)) setPos(null); };
+    const close = (e: Event) => {
+      const t = e.target as Node;
+      if (!ref.current?.contains(t) && !menuRef.current?.contains(t)) setPos(null);
+    };
     const closeNow = () => setPos(null);
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setPos(null); };
     document.addEventListener('mousedown', close);
@@ -258,8 +263,9 @@ export const Menu = ({ items, align = 'right', trigger }: { items: MenuItem[]; a
       <button ref={btnRef} type="button" onClick={toggle} className={cx('p-1.5 rounded-md hover:text-ink hover:bg-subtle', open ? 'text-ink bg-subtle' : 'text-muted')} aria-label="Mais ações">
         {trigger || <MoreHorizontal size={16} />}
       </button>
-      {open && (
-        <div style={{ ...pos, width: MENU_WIDTH }} className="fixed z-[80] bg-card border border-line rounded-md shadow-pop py-1 animate-fade-in">
+      {/* Portal no <body>: o menu não herda transparência/recorte do card (ex.: card "Enviado" fica opaco) */}
+      {open && createPortal(
+        <div ref={menuRef} style={{ ...pos, width: MENU_WIDTH }} className="fixed z-[80] bg-card border border-line rounded-md shadow-pop py-1 animate-fade-in">
           {items.map(it => (
             <button
               key={it.label}
@@ -271,7 +277,8 @@ export const Menu = ({ items, align = 'right', trigger }: { items: MenuItem[]; a
               <it.icon size={14} className={it.danger ? '' : 'text-muted'} /> {it.label}
             </button>
           ))}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
