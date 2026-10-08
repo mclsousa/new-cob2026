@@ -1,6 +1,6 @@
 // Auto-teste da lógica crítica. Rodar: npm run check
 import assert from 'node:assert/strict';
-import { parseClientData, normalizeCsvIfNeeded, detectInputType, mergeImport } from '../utils/parser';
+import { parseClientData, normalizeCsvIfNeeded, detectInputType, mergeImport, asTypedList, removeListType, listStats } from '../utils/parser';
 import { toWhatsappNumber, processSpinSyntax, extractPhone } from '../utils/helpers';
 import { buildPixPayload, crc16, normalizePixKey } from '../utils/pix';
 import { addMonthsClamped, dueStatus, monthsFromLabel, lastPaymentByName, isRecentlyPaid, forecastRevenue, riskByName, dailySummary, dailyMessage, DEFAULT_NOTIFY } from '../utils/billing';
@@ -97,8 +97,19 @@ const iptvB = ['Clientes IPTV', '2 maria02 y'].join('\n');
 const p2p = ['Clientes P2P', '3 ze03 z'].join('\n');
 const sep = '\n\n';
 assert.equal(mergeImport(iptvA + sep + p2p, iptvB), p2p + sep + iptvB);
-assert.equal(mergeImport(iptvA + sep + p2p, 'texto livre'), 'texto livre');
+// Importar P2P não apaga IPTV (e o contrário), nem texto digitado à mão
+assert.equal(mergeImport(iptvA, p2p), iptvA + sep + p2p);
+assert.equal(mergeImport('anotado à mão' + sep + iptvA, iptvB), 'anotado à mão' + sep + iptvB);
 assert.equal(mergeImport('', iptvA), iptvA);
+// Arquivo fora do padrão do painel ganha o tipo do botão; relatório do painel mantém o próprio tipo
+const oldFormat = '123 ana 01/01/2026 10:00 05/11/2026 23:59 21 99999 9999';
+const asP2P = asTypedList(oldFormat, 'p2p');
+assert.deepEqual([asP2P.type, asP2P.text.split('\n')[0]], ['p2p', 'Clientes P2P']);
+assert.equal(parse(asP2P.text)[0].type, 'p2p');
+assert.equal(parse(asTypedList(oldFormat, 'iptv').text)[0].type, 'iptv');
+assert.equal(asTypedList(normalizeCsvIfNeeded(IPTV), 'p2p').type, 'iptv');
+assert.equal(removeListType(iptvA + sep + p2p, 'iptv'), p2p);
+assert.deepEqual(listStats(iptvA + sep + p2p + sep + 'solto'), { iptv: 1, p2p: 1, other: 1 });
 
 // Atualizações: tag da Release -> versão/build; corpo -> lista de novidades
 assert.deepEqual(parseTag('apk-v2.0.17'), { version: '2.0.17', build: 17 });

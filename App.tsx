@@ -10,7 +10,7 @@ import {
   PaymentRecord, Page, PeriodPreset, StatusFilter, TypeFilter,
 } from './types';
 import { DEFAULT_CONFIG } from './constants';
-import { parseClientData, detectInputType, normalizeCsvIfNeeded, mergeImport } from './utils/parser';
+import { parseClientData, detectInputType, normalizeCsvIfNeeded, mergeImport, removeListType } from './utils/parser';
 import { extractPhone, extractPhoneValidated, generateCSV, formatDateShort, toInputDate, formatDate, downloadBlob, toWhatsappNumber, loadJSON, saveItem } from './utils/helpers';
 import { getWeekdayContext, getUpcomingRange } from './utils/calendar';
 import { lastPaymentByName, isRecentlyPaid, storedToParsed, formatBRL, riskByName, dailySummary, DailySummary, notifySettings } from './utils/billing';
@@ -944,6 +944,7 @@ function App() {
         value={inputData}
         onChange={setInputData}
         onImport={text => setInputData(prev => mergeImport(prev, text))}
+        onRemoveType={type => setInputData(prev => removeListType(prev, type))}
         onClear={() => { setInputData(''); setResults([]); setFlatResults([]); setResultTitle(''); setPeriod(null); }}
         onProcess={handleProcessFromImport}
         onClose={() => setIsImportOpen(false)}

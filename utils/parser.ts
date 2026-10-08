@@ -307,17 +307,50 @@ export const normalizeCsvIfNeeded = (input: string): string => {
         .join('\n');
 };
 
+export type ListType = 'iptv' | 'p2p';
+
+const HEADER: Record<ListType, string> = { iptv: 'Clientes IPTV', p2p: 'Clientes P2P' };
+const splitBlocks = (t: string) => t.split(/\n\s*\n/).map(b => b.trim()).filter(Boolean);
+const blockKind = (b: string): ListType | null =>
+    b.startsWith(HEADER.iptv) ? 'iptv' : b.startsWith(HEADER.p2p) ? 'p2p' : null;
+
 /**
- * Junta um arquivo novo à lista atual SUBSTITUINDO o anterior do mesmo tipo:
- * relatório IPTV novo troca o IPTV antigo e mantém o P2P (e vice-versa).
- * Texto em formato desconhecido (sem "Clientes IPTV/P2P") substitui tudo.
+ * Prepara um arquivo/texto importado como lista de um tipo (botão IPTV ou P2P).
+ * Relatório do painel já traz o tipo no cabeçalho e ele prevalece; texto em outro
+ * formato ganha o cabeçalho do tipo escolhido (o parser usa a seção para definir o tipo).
+ * Retorna também o tipo efetivo, para avisar quando o arquivo era do outro tipo.
+ */
+export const asTypedList = (normalized: string, chosen: ListType): { text: string; type: ListType } => {
+    const blocks = splitBlocks(normalized);
+    const detected = blocks.map(blockKind).find((k): k is ListType => k !== null);
+    const type = detected ?? chosen;
+    const text = blocks.map(b => (blockKind(b) ? b : `${HEADER[type]}\n${b}`)).join('\n\n');
+    return { text, type };
+};
+
+/**
+ * Junta a lista nova à atual SUBSTITUINDO só a do mesmo tipo:
+ * IPTV novo troca o IPTV antigo e mantém o P2P (e vice-versa).
+ * Blocos sem tipo (texto digitado à mão) nunca são apagados.
  */
 export const mergeImport = (prev: string, incoming: string): string => {
-    const blocks = (t: string) => t.split(/\n\s*\n/).map(b => b.trim()).filter(Boolean);
-    const kind = (b: string) => (b.startsWith('Clientes IPTV') ? 'iptv' : b.startsWith('Clientes P2P') ? 'p2p' : null);
-    const newBlocks = blocks(incoming);
-    const newKinds = new Set(newBlocks.map(kind));
-    if (newKinds.has(null)) return incoming.trim();
-    const kept = blocks(prev).filter(b => { const k = kind(b); return k !== null && !newKinds.has(k); });
+    const newBlocks = splitBlocks(incoming);
+    const newKinds = new Set(newBlocks.map(blockKind).filter(Boolean));
+    const kept = splitBlocks(prev).filter(b => { const k = blockKind(b); return k === null || !newKinds.has(k); });
     return [...kept, ...newBlocks].join('\n\n');
+};
+
+/** Remove da lista só os blocos de um tipo (botão "Limpar" de IPTV ou P2P). */
+export const removeListType = (text: string, type: ListType): string =>
+    splitBlocks(text).filter(b => blockKind(b) !== type).join('\n\n');
+
+/** Quantas linhas de clientes há em cada tipo (para mostrar na tela de importar). */
+export const listStats = (text: string): Record<ListType, number> & { other: number } => {
+    const out = { iptv: 0, p2p: 0, other: 0 };
+    for (const b of splitBlocks(text)) {
+        const k = blockKind(b);
+        const rows = b.split('\n').filter(l => l.trim()).length - (k ? 1 : 0);
+        out[k ?? 'other'] += rows;
+    }
+    return out;
 };
