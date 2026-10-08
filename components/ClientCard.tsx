@@ -291,7 +291,10 @@ const ClientCard: React.FC<ClientCardProps> = ({
               {tagChips}
             </div>
             {client.customNotes && (
-              <p className="text-[11px] text-muted mt-1 flex items-center gap-1 truncate"><StickyNote size={10} className="flex-shrink-0" /> <HighlightedText text={client.customNotes} query={searchQuery} /></p>
+              <p className="mt-1.5 flex items-start gap-1.5 text-xs font-medium text-ink bg-warn/15 border-l-2 border-warn rounded-r px-2 py-1">
+                <StickyNote size={12} className="text-warn flex-shrink-0 mt-px" />
+                <span className="min-w-0 break-words"><HighlightedText text={client.customNotes} query={searchQuery} /></span>
+              </p>
             )}
           </div>
           <div className="flex items-center gap-1 flex-shrink-0" onClick={e => e.stopPropagation()}>
@@ -385,8 +388,8 @@ const ClientCard: React.FC<ClientCardProps> = ({
             </div>
           )}
           {client.customNotes && (
-            <div className="text-xs border-l-2 border-warn pl-2.5 py-0.5 text-ink">
-              <span className="text-muted flex items-center gap-1 mb-0.5"><StickyNote size={11} /> Observação</span>
+            <div className="text-sm font-medium text-ink bg-warn/15 border-l-2 border-warn rounded-r px-3 py-2">
+              <span className="text-[11px] font-medium uppercase tracking-wide text-warn flex items-center gap-1 mb-0.5"><StickyNote size={12} /> Observação privada</span>
               <HighlightedText text={client.customNotes} query={searchQuery} />
             </div>
           )}

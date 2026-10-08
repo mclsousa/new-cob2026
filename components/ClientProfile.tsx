@@ -97,7 +97,11 @@ const ClientProfile: React.FC<ClientProfileProps> = props => {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
           <p className="flex items-center gap-2 text-ink"><Phone size={14} className="text-muted" /> <span className="font-mono">{phone || 'sem telefone'}</span></p>
-          {note && <p className="flex items-start gap-2 text-ink"><StickyNote size={14} className="text-muted mt-0.5" /> {note}</p>}
+          {note && (
+            <p className="flex items-start gap-2 text-ink font-medium bg-warn/15 border-l-2 border-warn rounded-r px-3 py-2 sm:col-span-2">
+              <StickyNote size={14} className="text-warn flex-shrink-0 mt-0.5" /> <span className="min-w-0 break-words">{note}</span>
+            </p>
+          )}
           {panelNotes && <p className="flex items-start gap-2 text-ink sm:col-span-2"><Info size={14} className="text-muted mt-0.5" /> {panelNotes}</p>}
         </div>
 
