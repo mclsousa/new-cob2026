@@ -21,6 +21,7 @@ import LinkClientsModal from './components/LinkClientsModal';
 import ReminderModal from './components/ReminderModal';
 import ClientProfile from './components/ClientProfile';
 import ErrorBoundary from './components/ErrorBoundary';
+import { BrandIcon } from './components/BrandIcon';
 import UpdateModal from './components/UpdateModal';
 import { checkForUpdate, installedVersion, AppUpdate, InstalledVersion } from './utils/updates';
 import ImportModal from './components/ImportModal';
@@ -103,7 +104,7 @@ const loadConfig = (): AppConfig => {
 
 const BrandMark = ({ size = 32 }: { size?: number }) => (
   <span className="rounded-md bg-brand text-white flex items-center justify-center flex-shrink-0" style={{ width: size, height: size }}>
-    <Send size={size * 0.5} />
+    <BrandIcon size={size * 0.62} />
   </span>
 );
 
