@@ -1,7 +1,7 @@
 // Registrar pagamento: escolhe o plano, renova o vencimento e (opcional) envia o recibo.
 // Substitui o antigo "Gerar Recibo".
 import React, { useEffect, useMemo, useState } from 'react';
-import { Wallet, Calendar, Check } from 'lucide-react';
+import { CircleDollarSign, Calendar, Check } from 'lucide-react';
 import { ParsedClient, AppConfig, PricingPlan } from '../types';
 import { toInputDate, formatDate } from '../utils/helpers';
 import { addMonthsClamped, monthsFromLabel, planGroupFor, startOfDay, formatBRL } from '../utils/billing';
@@ -60,7 +60,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ client, config, canSendRece
       onClose={onClose}
       title="Registrar pagamento"
       subtitle={`${client.name} · vence ${formatDate(client.dueDate)}`}
-      icon={Wallet}
+      icon={CircleDollarSign}
       size="sm"
       footer={
         <>

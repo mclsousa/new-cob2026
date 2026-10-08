@@ -4,7 +4,7 @@ import { buildPixPayload } from '../utils/pix';
 import { extractPhone, formatDate, processSpinSyntax, extractCredentials, toWhatsappNumber } from '../utils/helpers';
 import { dueStatus, Risk } from '../utils/billing';
 import { openExternal } from '../utils/native';
-import { Copy, Phone, Edit, User, CheckCircle, ChevronDown, ChevronUp, PenTool, ListChecks, Link as LinkIcon, Lock, Key, Bell, Wallet, StickyNote, Info, UserRound, AlertTriangle } from 'lucide-react';
+import { Copy, Phone, Edit, User, CheckCircle, ChevronDown, ChevronUp, PenTool, ListChecks, Link as LinkIcon, Lock, Key, Bell, Wallet, StickyNote, Info, UserRound, AlertTriangle, CircleDollarSign } from 'lucide-react';
 import { Button, Menu, MenuItem, cx, tagStyle } from './ui';
 
 interface ClientCardProps {
@@ -279,6 +279,12 @@ const ClientCard: React.FC<ClientCardProps> = ({
     </label>
   );
 
+  const payIconButton = (size: number) => (
+    <button onClick={() => onPay(client)} title="Registrar pagamento" aria-label="Registrar pagamento" className="p-2 rounded-md text-ok hover:bg-ok/10">
+      <CircleDollarSign size={size} />
+    </button>
+  );
+
   const whatsappIconButton = (size: number) => (
     <button onClick={() => handleAction('whatsapp')} disabled={!whatsapp} title="Enviar WhatsApp" className="p-2 rounded-md text-whatsapp hover:bg-whatsapp/10 disabled:opacity-30 disabled:cursor-not-allowed">
       <WhatsappIcon size={size} />
@@ -300,7 +306,7 @@ const ClientCard: React.FC<ClientCardProps> = ({
           <div className="text-xs text-muted font-mono truncate hidden md:block">{displayPhone || '—'}</div>
           <div className="hidden md:flex items-center gap-1.5 min-w-0 overflow-hidden">{chips}</div>
         </div>
-        <Button size="icon" variant="ghost" onClick={() => onPay(client)} title="Registrar pagamento"><Wallet size={15} /></Button>
+        {payIconButton(16)}
         {whatsappIconButton(15)}
       </div>
     );
@@ -324,9 +330,9 @@ const ClientCard: React.FC<ClientCardProps> = ({
             )}
           </div>
           <div className="flex items-center gap-1 flex-shrink-0" onClick={e => e.stopPropagation()}>
-            <Button size="icon" variant="ghost" onClick={() => onPay(client)} title="Registrar pagamento" className="hidden sm:inline-flex"><Wallet size={15} /></Button>
-            {whatsappIconButton(16)}
-            <Menu items={[{ label: 'Registrar pagamento', icon: Wallet, onClick: () => onPay(client) }, ...menuItems]} />
+            {payIconButton(18)}
+            {whatsappIconButton(18)}
+            <Menu items={menuItems} />
             <ChevronDown size={15} className="text-muted ml-1 hidden sm:block" />
           </div>
         </div>
@@ -426,7 +432,7 @@ const ClientCard: React.FC<ClientCardProps> = ({
         {/* no celular as ações ocupam uma linha inteira, com botões do mesmo tamanho */}
         <div className="flex gap-2 w-full sm:w-auto [&>button]:flex-1 sm:[&>button]:flex-none">
           <Button size="sm" icon={Copy} onClick={() => handleAction('copy')} title="Copiar mensagem">Copiar</Button>
-          <Button size="sm" variant="soft" icon={Wallet} onClick={() => onPay(client)}>Pago</Button>
+          <Button size="sm" variant="soft" icon={CircleDollarSign} onClick={() => onPay(client)}>Pago</Button>
           <Button size="sm" variant="whatsapp" onClick={() => handleAction('whatsapp')} disabled={!whatsapp} title="Enviar WhatsApp">
             <WhatsappIcon size={13} /> Enviar
           </Button>
