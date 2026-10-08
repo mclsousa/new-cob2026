@@ -119,4 +119,5 @@ export interface Reminder {
   clientName: string;
   scheduledFor: number; // timestamp
   fired: boolean;
+  note?: string; // texto do lembrete (o que fazer)
 }

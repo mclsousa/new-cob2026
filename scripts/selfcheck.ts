@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { parseClientData, normalizeCsvIfNeeded, detectInputType, mergeImport, asTypedList, removeListType, listStats } from '../utils/parser';
 import { toWhatsappNumber, processSpinSyntax, extractPhone } from '../utils/helpers';
 import { buildPixPayload, crc16, normalizePixKey } from '../utils/pix';
-import { addMonthsClamped, dueStatus, monthsFromLabel, lastPaymentByName, isRecentlyPaid, forecastRevenue, riskByName, dailySummary, dailyMessage, DEFAULT_NOTIFY } from '../utils/billing';
+import { addMonthsClamped, dueStatus, monthsFromLabel, lastPaymentByName, isRecentlyPaid, forecastRevenue, riskByName, dailySummary, dailyMessage, DEFAULT_NOTIFY, reminderBody } from '../utils/billing';
 import { DEFAULT_CONFIG } from '../constants';
 import { parseTag, parseNotes } from '../utils/updates';
 import * as syncApi from '../api/sync';
@@ -116,6 +116,10 @@ assert.deepEqual(parseTag('apk-v2.0.17'), { version: '2.0.17', build: 17 });
 assert.equal(parseTag('v1.2'), null);
 const releaseBody = ['## Novidades', '- Novo: ficha do cliente', '- Correção: tela branca', '', 'Instala por cima.'].join('\n');
 assert.deepEqual(parseNotes(releaseBody), ['Novo: ficha do cliente', 'Correção: tela branca']);
+
+// Texto do lembrete: com e sem anotação
+assert.equal(reminderBody({ clientName: 'Ana', note: '  ligar e oferecer 3 meses ' }), 'Ana: ligar e oferecer 3 meses');
+assert.equal(reminderBody({ clientName: 'Ana', note: ' ' }), 'Hora de cobrar Ana');
 
 // Spin só sorteia blocos com "|"
 assert.equal(processSpinSyntax('{pix} {plano1}'), '{pix} {plano1}');

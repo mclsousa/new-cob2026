@@ -4,7 +4,7 @@ import { LocalNotifications } from '@capacitor/local-notifications';
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 import type { StoredClient, Reminder, NotifySettings } from '../types';
-import { dailySummary, dailyMessage } from './billing';
+import { dailySummary, dailyMessage, reminderBody } from './billing';
 
 export const isNative = (): boolean => Capacitor.isNativePlatform();
 
@@ -70,7 +70,7 @@ export const rescheduleNative = async (clients: StoredClient[], reminders: Remin
       notifications.push({
         id: reminderNotifId(r.id),
         title: 'Lembrete de cobrança',
-        body: `Hora de cobrar ${r.clientName}`,
+        body: reminderBody(r),
         schedule: { at: new Date(r.scheduledFor), allowWhileIdle: true },
         extra: { page: 'billing' },
       });

@@ -3,6 +3,7 @@ import { ParsedClient } from '../types';
 import { Bell, BellRing, AlertCircle } from 'lucide-react';
 import { toInputDate } from '../utils/helpers';
 import { isNative } from '../utils/native';
+import { reminderBody } from '../utils/billing';
 import { Modal, Button, inputCls, labelCls } from './ui';
 
 // "AAAA-MM-DD" + "HH:mm" no fuso LOCAL (new Date('AAAA-MM-DD') seria meia-noite UTC = dia anterior no Brasil)
@@ -16,18 +17,20 @@ interface ReminderModalProps {
   client: ParsedClient | null;
   defaultTime: string;
   onClose: () => void;
-  onConfirm: (client: ParsedClient, scheduledFor: number) => void;
+  onConfirm: (client: ParsedClient, scheduledFor: number, note: string) => void;
 }
 
 const ReminderModal: React.FC<ReminderModalProps> = ({ client, defaultTime, onClose, onConfirm }) => {
   const [notifPerm, setNotifPerm] = useState<NotificationPermission>('default');
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedTime, setSelectedTime] = useState(defaultTime || '20:00');
+  const [note, setNote] = useState('');
 
   useEffect(() => {
     if (client) {
       setSelectedDate(toInputDate(new Date()));
       setSelectedTime(defaultTime || '20:00');
+      setNote('');
       if ('Notification' in window) setNotifPerm(Notification.permission);
     }
   }, [client, defaultTime]);
@@ -44,7 +47,7 @@ const ReminderModal: React.FC<ReminderModalProps> = ({ client, defaultTime, onCl
 
   const handleConfirm = () => {
     if (!selectedDate || !selectedTime) return;
-    onConfirm(client, toLocalDateTime(selectedDate, selectedTime).getTime());
+    onConfirm(client, toLocalDateTime(selectedDate, selectedTime).getTime(), note);
     onClose();
   };
 
@@ -91,9 +94,25 @@ const ReminderModal: React.FC<ReminderModalProps> = ({ client, defaultTime, onCl
           </label>
         </div>
 
+        <label className="block">
+          <span className={labelCls}>O que fazer (opcional)</span>
+          <textarea
+            rows={2}
+            maxLength={140}
+            value={note}
+            onChange={e => setNote(e.target.value)}
+            placeholder="Ex.: confirmar se fez o PIX, oferecer plano de 3 meses..."
+            className={inputCls}
+          />
+        </label>
+
         {scheduledLabel && (
-          <div className="flex items-center gap-2 bg-brand-soft text-brand px-3 py-2.5 rounded-md text-sm font-medium">
-            <BellRing size={14} /> {scheduledLabel}
+          <div className="flex items-start gap-2 bg-brand-soft text-brand px-3 py-2.5 rounded-md text-sm">
+            <BellRing size={14} className="flex-shrink-0 mt-0.5" />
+            <span className="min-w-0">
+              <span className="font-medium">{scheduledLabel}</span>
+              <span className="block text-xs text-ink/70 break-words">{reminderBody({ clientName: client.name, note })}</span>
+            </span>
           </div>
         )}
 

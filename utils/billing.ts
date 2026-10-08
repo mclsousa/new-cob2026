@@ -142,6 +142,10 @@ export const riskByName = (payments: PaymentRecord[], history: ActionLog[]): Map
   return out;
 };
 
+// Texto da notificação de um lembrete (mesmo no app, no celular e no push do servidor)
+export const reminderBody = (r: { clientName: string; note?: string }): string =>
+  r.note?.trim() ? `${r.clientName}: ${r.note.trim()}` : `Hora de cobrar ${r.clientName}`;
+
 // --- Resumo do dia (notificação da manhã) ---
 export interface DailySummary { today: number; tomorrow: number; overdue: number }
 export const dailySummary = (clients: StoredClient[], now = new Date()): DailySummary => {

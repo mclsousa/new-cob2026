@@ -6,7 +6,7 @@
 import { json, redis } from './_shared.js';
 import { readState } from './sync.js';
 import { sendToAll } from './_push.js';
-import { dailySummary, dailyMessage, notifySettings, riskByName } from '../utils/billing.js';
+import { dailySummary, dailyMessage, notifySettings, riskByName, reminderBody } from '../utils/billing.js';
 import type { StoredClient, AppConfig, Reminder, PaymentRecord, ActionLog } from '../types.js';
 
 // "Hoje" e a hora no horário de Brasília (o servidor roda em UTC)
@@ -54,7 +54,7 @@ export async function GET(req: Request) {
         const age = now.getTime() - r.scheduledFor;
         if (age < 0 || age > REMINDER_WINDOW_MS) continue;
         if (!(await firstTime(`tvbrcob:push:rem:${r.id}`, 2 * 86400))) continue;
-        sent += await sendToAll({ title: 'Lembrete de cobrança', body: `Hora de cobrar ${r.clientName}`, url: '/?p=billing', tag: `rem-${r.id}` });
+        sent += await sendToAll({ title: 'Lembrete de cobrança', body: reminderBody(r), url: '/?p=billing', tag: `rem-${r.id}` });
       }
       result.reminders = sent;
     }

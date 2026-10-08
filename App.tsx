@@ -13,7 +13,7 @@ import { DEFAULT_CONFIG } from './constants';
 import { parseClientData, detectInputType, normalizeCsvIfNeeded, mergeImport, removeListType } from './utils/parser';
 import { extractPhone, extractPhoneValidated, generateCSV, formatDateShort, toInputDate, formatDate, downloadBlob, toWhatsappNumber, loadJSON, saveItem } from './utils/helpers';
 import { getWeekdayContext, getUpcomingRange } from './utils/calendar';
-import { lastPaymentByName, isRecentlyPaid, storedToParsed, formatBRL, riskByName, dailySummary, DailySummary, notifySettings } from './utils/billing';
+import { lastPaymentByName, isRecentlyPaid, storedToParsed, formatBRL, riskByName, dailySummary, DailySummary, notifySettings, reminderBody } from './utils/billing';
 import ClientCard from './components/ClientCard';
 import EditClientModal from './components/EditClientModal';
 import PaymentModal, { PaymentInput } from './components/PaymentModal';
@@ -222,9 +222,9 @@ function App() {
   // --- Lembretes: dispara os vencidos ao abrir e agenda os das próximas 24h ---
   const scheduleReminder = useCallback((r: Reminder) => {
     const fire = () => {
-      addToast(`Lembrete: cobrar ${r.clientName}`, 'warning');
+      addToast(`Lembrete: ${reminderBody(r)}`, 'warning');
       if ('Notification' in window && Notification.permission === 'granted') {
-        new Notification('TVBR.Cob', { body: `Hora de cobrar: ${r.clientName}`, icon: '/icons/icon-192.png' });
+        new Notification('Lembrete de cobrança', { body: reminderBody(r), icon: '/icons/icon-192.png' });
       }
       setReminders(prev => prev.map(x => (x.id === r.id ? { ...x, fired: true } : x)));
     };
@@ -618,8 +618,8 @@ function App() {
   };
 
   // --- Lembretes ---
-  const handleAddReminder = (client: ParsedClient, scheduledFor: number) => {
-    const reminder: Reminder = { id: crypto.randomUUID(), clientId: client.id, clientName: client.name, scheduledFor, fired: false };
+  const handleAddReminder = (client: ParsedClient, scheduledFor: number, note: string) => {
+    const reminder: Reminder = { id: crypto.randomUUID(), clientId: client.id, clientName: client.name, scheduledFor, fired: false, note: note.trim() || undefined };
     setReminders(prev => [...prev.filter(r => r.clientName.toLowerCase() !== client.name.toLowerCase()), reminder]);
     scheduleReminder(reminder);
     addToast(`Lembrete agendado: ${new Date(scheduledFor).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`, 'info');
@@ -801,7 +801,7 @@ function App() {
               }
               items={pendingReminders.length
                 ? pendingReminders.slice(0, 8).map(r => ({
-                  label: `${r.clientName} · ${new Date(r.scheduledFor).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`,
+                  label: `${r.clientName} · ${new Date(r.scheduledFor).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}${r.note ? ` — ${r.note}` : ''}`,
                   icon: Bell,
                   onClick: () => setReminders(prev => prev.filter(x => x.id !== r.id)),
                 }))
