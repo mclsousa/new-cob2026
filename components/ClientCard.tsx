@@ -33,6 +33,16 @@ export const WhatsappIcon = ({ size = 16, className }: { size?: number; classNam
   </svg>
 );
 
+// Sigla do tipo da conta: IPTV (roxo) ou P2P (verde-água), como na tela de importar
+const TypeTag = ({ type }: { type: ParsedClient['type'] }) => (
+  <span className={cx(
+    'inline-flex items-center text-[10px] font-bold leading-none px-1.5 py-[3px] rounded border flex-shrink-0',
+    type === 'p2p' ? 'text-ok border-ok/50 bg-ok/10' : 'text-brand border-brand/40 bg-brand-soft',
+  )}>
+    {type === 'p2p' ? 'P2P' : 'IPTV'}
+  </span>
+);
+
 const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 const HighlightedText = ({ text, query }: { text: string; query: string }) => {
@@ -259,7 +269,8 @@ const ClientCard: React.FC<ClientCardProps> = ({
         <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: status.color }} title={status.label} />
         <div className="flex-1 min-w-0 grid grid-cols-2 md:grid-cols-[2fr_1fr_1.3fr_2fr] gap-x-3 items-center">
           <div className="text-sm font-medium text-ink truncate flex items-center gap-1.5">
-            <HighlightedText text={client.name} query={searchQuery} />
+            <TypeTag type={client.type} />
+            <span className="truncate"><HighlightedText text={client.name} query={searchQuery} /></span>
             {hasLinkedClients && <span className="text-[10px] text-info">+{client.linked!.length}</span>}
           </div>
           <div className="text-xs text-muted">{formatDate(client.dueDate)}</div>
@@ -280,6 +291,7 @@ const ClientCard: React.FC<ClientCardProps> = ({
           <span className="w-1 self-stretch rounded-full flex-shrink-0" style={{ backgroundColor: status.color }} />
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
+              <TypeTag type={client.type} />
               <span className="text-sm font-medium text-ink"><HighlightedText text={client.name} query={searchQuery} /></span>
               {hasLinkedClients && <span className="text-[10px] text-info font-medium">+{client.linked!.length} vinculada(s)</span>}
               {isCustomMessage && <span className="text-[10px] text-brand flex items-center gap-0.5"><PenTool size={9} /> Personalizada</span>}
@@ -314,6 +326,7 @@ const ClientCard: React.FC<ClientCardProps> = ({
       {!isFocusMode && (
         <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-line cursor-pointer select-none" onClick={collapse}>
           <div className="flex items-center gap-2 min-w-0 flex-wrap">
+            <TypeTag type={client.type} />
             <span className="text-sm font-medium text-ink">{client.name}</span>
             <Badge tone={status.tone}>{status.label}</Badge>
             {statusBadges}
@@ -325,7 +338,7 @@ const ClientCard: React.FC<ClientCardProps> = ({
       <div className={cx('flex-1 flex flex-col min-h-0 overflow-y-auto', isFocusMode ? 'p-4 sm:p-8' : 'p-4')}>
         {isFocusMode && (
           <div className="mb-5 text-center">
-            <h2 className="text-xl sm:text-2xl font-medium text-ink">{client.name}</h2>
+            <h2 className="text-xl sm:text-2xl font-medium text-ink flex items-center justify-center gap-2"><TypeTag type={client.type} />{client.name}</h2>
             <div className="flex items-center justify-center gap-1.5 mt-2 flex-wrap">
               <Badge tone={status.tone}>{status.label}</Badge>
               <span className="text-sm text-muted">{statusText}</span>
