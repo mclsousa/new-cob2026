@@ -248,8 +248,8 @@ const ClientCard: React.FC<ClientCardProps> = ({
     ...activeTags.map(tag => <Chip key={tag.id} style={tagStyle(tag.color)}>{tag.label}</Chip>),
   ].filter(Boolean);
   const sentMark = isSent && !isPaid && (
-    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-ok whitespace-nowrap">
-      <CheckCircle size={12} /> Enviado
+    <span className="inline-flex items-center gap-0.5 text-[10px] font-medium leading-none text-ok/80 whitespace-nowrap">
+      <CheckCircle size={10} /> Enviado
     </span>
   );
   const chipsRow = (center?: boolean) => chips.length > 0 && (
@@ -317,8 +317,9 @@ const ClientCard: React.FC<ClientCardProps> = ({
   // --- RECOLHIDO ---
   if (isCollapsed && !isFocusMode) {
     return (
-      <div ref={rootRef} className={cx('bg-card rounded-md border border-line/60 shadow-card transition-colors hover:border-brand/30 scroll-mt-4', (isSent || isPaid) && 'opacity-70')}>
-        <div className="flex items-stretch gap-3 px-4 py-3 cursor-pointer select-none" onClick={() => setIsCollapsed(false)}>
+      <div ref={rootRef} className={cx('relative bg-card rounded-md border border-line/60 shadow-card transition-colors hover:border-brand/30 scroll-mt-4', (isSent || isPaid) && 'opacity-70')}>
+        {sentMark && <div className="absolute top-1.5 right-2.5 pointer-events-none">{sentMark}</div>}
+        <div className="flex items-center gap-3 px-4 py-3 cursor-pointer select-none" onClick={() => setIsCollapsed(false)}>
           <span className="w-1 self-stretch rounded-full flex-shrink-0" style={{ backgroundColor: status.color }} />
           <div className="flex-1 min-w-0 space-y-1.5">
             <p className="text-[15px] font-medium text-ink leading-snug break-words"><HighlightedText text={client.name} query={searchQuery} /> <TypeTag type={client.type} /></p>
@@ -331,13 +332,10 @@ const ClientCard: React.FC<ClientCardProps> = ({
               </p>
             )}
           </div>
-          <div className="flex flex-col items-end justify-between gap-1 flex-shrink-0">
-            <div className="min-h-[16px]">{sentMark}</div>
-            <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
-              {whatsappIconButton(18)}
-              <Menu items={[payItem, ...menuItems]} />
-              <ChevronDown size={15} className="text-muted ml-1 hidden sm:block" />
-            </div>
+          <div className="flex items-center gap-1 flex-shrink-0" onClick={e => e.stopPropagation()}>
+            {whatsappIconButton(18)}
+            <Menu items={[payItem, ...menuItems]} />
+            <ChevronDown size={15} className="text-muted ml-1 hidden sm:block" />
           </div>
         </div>
       </div>

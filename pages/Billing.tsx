@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { ParsedClient, PeriodPreset, StatusFilter, TypeFilter, ResultViewMode, ClientTag, DateRange } from '../types';
 import { Card, Button, PageHeader, EmptyState, StatCard, Segmented, ChipGroup, inputCls, cx } from '../components/ui';
 import { Progress } from '../components/charts';
-import { Upload, Download, LayoutGrid, LayoutList, Send, Filter, RotateCcw } from 'lucide-react';
+import { Upload, LayoutGrid, LayoutList, Send, Filter, RotateCcw } from 'lucide-react';
 
 interface BillingProps {
   hasInput: boolean;
@@ -29,7 +29,6 @@ interface BillingProps {
   onResetFilters: () => void;
   onToggleView: () => void;
   onFocus: (queue: boolean) => void;
-  onExport: () => void;
   onImport: () => void;
   renderCard: (c: ParsedClient) => React.ReactNode;
 }
@@ -70,9 +69,6 @@ const Billing: React.FC<BillingProps> = props => {
       <PageHeader
         title="Cobranças"
         crumb={title || 'Cobranças'}
-        actions={processed && (
-          <Button icon={Download} onClick={props.onExport} disabled={!clients.length} className="hidden sm:inline-flex">CSV</Button>
-        )}
       />
 
       {/* Barra de filtros */}

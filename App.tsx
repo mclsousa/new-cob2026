@@ -11,7 +11,7 @@ import {
 } from './types';
 import { DEFAULT_CONFIG } from './constants';
 import { parseClientData, detectInputType, normalizeCsvIfNeeded, mergeImport, removeListType } from './utils/parser';
-import { extractPhone, extractPhoneValidated, generateCSV, formatDateShort, toInputDate, formatDate, downloadBlob, toWhatsappNumber, loadJSON, saveItem } from './utils/helpers';
+import { extractPhone, extractPhoneValidated, formatDateShort, toInputDate, formatDate, toWhatsappNumber, loadJSON, saveItem } from './utils/helpers';
 import { getWeekdayContext, getUpcomingRange } from './utils/calendar';
 import { lastPaymentByName, isRecentlyPaid, storedToParsed, formatBRL, riskByName, dailySummary, DailySummary, notifySettings, reminderBody } from './utils/billing';
 import ClientCard from './components/ClientCard';
@@ -639,15 +639,6 @@ function App() {
     setIsImportOpen(true);
   };
 
-  const handleExport = () => {
-    if (filteredResults.length === 0) return;
-    const rows = filteredResults.map(r => ({ name: r.name, date: r.dueDate, notes: extractPhone(r.rawNotes).cleanText, phone: extractPhone(r.rawNotes).original, customNotes: r.customNotes || '' }));
-    const csv = generateCSV(rows, config.defaultTime || '20:00');
-    const name = `clientes_export_${Date.now()}.csv`;
-    void saveFile(name, String.fromCharCode(0xfeff) + csv, () => downloadBlob(new Blob([String.fromCharCode(0xfeff), csv], { type: 'text/csv;charset=utf-8;' }), name));
-    addToast('Arquivo exportado.', 'success');
-  };
-
   // --- Risco e ficha do cliente ---
   const risks = useMemo(() => riskByName(payments, actionHistory), [payments, actionHistory]);
   const storedByName = useMemo(() => new Map(clientDatabase.map(c => [c.name.toLowerCase(), c])), [clientDatabase]);
@@ -872,7 +863,6 @@ function App() {
                 onResetFilters={() => { setTypeFilter('all'); setStatusFilter('all'); setTagFilter(''); }}
                 onToggleView={() => setResultViewMode(v => (v === 'list' ? 'grid' : 'list'))}
                 onFocus={startFocusMode}
-                onExport={handleExport}
                 onImport={() => setIsImportOpen(true)}
                 renderCard={c => renderCard(c)}
               />
