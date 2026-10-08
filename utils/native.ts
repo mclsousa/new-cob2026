@@ -39,6 +39,23 @@ export const requestNativeNotify = async (): Promise<NativePermission> => {
   return display === 'granted' ? 'granted' : display === 'denied' ? 'denied' : 'prompt';
 };
 
+// Canais próprios com prioridade alta: tocam o som padrão do celular, vibram e aparecem no topo.
+// O canal "Default" do plugin é de prioridade média e fica mudo em vários Androids (Xiaomi, Samsung).
+// O Android não deixa mudar um canal depois de criado: para alterar, use ids novos.
+const CHANNEL_REMINDERS = 'lembretes';
+const CHANNEL_DAILY = 'resumo-diario';
+let channelsReady: Promise<boolean> | null = null;
+const ensureChannels = () => (channelsReady ??= Promise.all([
+  LocalNotifications.createChannel({
+    id: CHANNEL_REMINDERS, name: 'Lembretes de cobrança', description: 'Lembretes agendados nos clientes',
+    importance: 4, visibility: 1, vibration: true, lights: true, lightColor: '#5E17EB',
+  }),
+  LocalNotifications.createChannel({
+    id: CHANNEL_DAILY, name: 'Resumo diário', description: 'Quantos clientes cobrar no dia',
+    importance: 4, visibility: 1, vibration: true, lights: true, lightColor: '#5E17EB',
+  }),
+]).then(() => true, () => { channelsReady = null; return false; })); // falhou: usa o canal padrão
+
 const DAILY_DAYS = 14; // resumos já calculados para as próximas 2 semanas (os vencimentos são conhecidos)
 const DAILY_ID_BASE = 900_000;
 const REMINDER_ID_BASE = 100_000;
@@ -57,6 +74,7 @@ const reminderNotifId = (id: string) => {
  */
 export const rescheduleNative = async (clients: StoredClient[], reminders: Reminder[], opts: NotifySettings, riskCount = 0): Promise<void> => {
   if (!isNative() || (await nativeNotifyPermission()) !== 'granted') return;
+  const ownChannels = await ensureChannels();
 
   const pending = await LocalNotifications.getPending();
   if (pending.notifications.length) await LocalNotifications.cancel({ notifications: pending.notifications.map(n => ({ id: n.id })) });
@@ -72,6 +90,7 @@ export const rescheduleNative = async (clients: StoredClient[], reminders: Remin
         title: 'Lembrete de cobrança',
         body: reminderBody(r),
         schedule: { at: new Date(r.scheduledFor), allowWhileIdle: true },
+        channelId: ownChannels ? CHANNEL_REMINDERS : undefined,
         extra: { page: 'billing' },
       });
     }
@@ -89,6 +108,7 @@ export const rescheduleNative = async (clients: StoredClient[], reminders: Remin
         title: msg.title,
         body: msg.body,
         schedule: { at, allowWhileIdle: true },
+        channelId: ownChannels ? CHANNEL_DAILY : undefined,
         extra: { page: 'billing' },
       });
     }
