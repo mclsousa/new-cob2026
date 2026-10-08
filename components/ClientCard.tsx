@@ -5,7 +5,7 @@ import { extractPhone, formatDate, processSpinSyntax, extractCredentials, toWhat
 import { dueStatus, Risk } from '../utils/billing';
 import { openExternal } from '../utils/native';
 import { Copy, Phone, Edit, User, CheckCircle, ChevronDown, ChevronUp, PenTool, ListChecks, Link as LinkIcon, Lock, Key, Bell, Wallet, StickyNote, Info, UserRound, AlertTriangle } from 'lucide-react';
-import { Badge, Button, Menu, MenuItem, cx, tagStyle } from './ui';
+import { Button, Menu, MenuItem, cx, tagStyle } from './ui';
 
 interface ClientCardProps {
   client: ParsedClient;
@@ -33,15 +33,26 @@ export const WhatsappIcon = ({ size = 16, className }: { size?: number; classNam
   </svg>
 );
 
-// Sigla do tipo da conta: IPTV (roxo) ou P2P (verde-água), como na tela de importar
+// Sigla do tipo da conta (visão em lista): IPTV (roxo) ou P2P (verde-água)
 const TypeTag = ({ type }: { type: ParsedClient['type'] }) => (
-  <span className={cx(
-    'inline-flex items-center text-[10px] font-bold leading-none px-1.5 py-[3px] rounded border flex-shrink-0',
-    type === 'p2p' ? 'text-ok border-ok/50 bg-ok/10' : 'text-brand border-brand/40 bg-brand-soft',
-  )}>
+  <span className={cx('text-[10px] font-bold tracking-wide flex-shrink-0', type === 'p2p' ? 'text-ok' : 'text-brand')}>
     {type === 'p2p' ? 'P2P' : 'IPTV'}
   </span>
 );
+
+// Pílula padrão das etiquetas (mesma altura e respiro em todas)
+const Chip = ({ children, className, style, title }: { children: React.ReactNode; className?: string; style?: React.CSSProperties; title?: string; key?: string }) => (
+  <span title={title} style={style} className={cx('inline-flex items-center gap-1 h-5 px-2 rounded-full text-[11px] font-medium leading-none whitespace-nowrap', className)}>
+    {children}
+  </span>
+);
+
+const Dot = () => <span className="text-muted/50" aria-hidden="true">•</span>;
+
+// Cor do texto do status (âmbar mais escuro que o da barra para ler bem no fundo branco)
+const STATUS_TEXT: Record<string, string> = {
+  overdue: 'text-danger', today: 'text-[#C27C0E]', tomorrow: 'text-brand', soon: 'text-info', active: 'text-ok',
+};
 
 const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -200,10 +211,10 @@ const ClientCard: React.FC<ClientCardProps> = ({
     if (plansToUse.length > 0) msg = msg.replace(/{plano1}/g, String(plansToUse[0].price));
     if (plansToUse.length > 1) msg = msg.replace(/{plano2}/g, String(plansToUse[1].price));
 
-    return { message: msg, statusText: `${prefixStr} (${formatDate(venc)})`, isCustomMessage: isCustom };
+    return { message: msg, isCustomMessage: isCustom };
   };
 
-  const { message, statusText, isCustomMessage } = calculateCardData();
+  const { message, isCustomMessage } = calculateCardData();
   const status = isExpiredMode ? dueStatus(new Date(0)) : dueStatus(client.dueDate);
   const templates = config.templates.additional || [];
 
@@ -232,18 +243,30 @@ const ClientCard: React.FC<ClientCardProps> = ({
     { label: 'Copiar telefone', icon: Phone, onClick: () => onCopy(displayPhone || ''), disabled: !displayPhone },
   ];
 
-  const statusBadges = (
-    <>
-      {isPaid && <Badge tone="ok" solid><Wallet size={10} /> Pago</Badge>}
-      {isSent && !isPaid && <Badge tone="ok"><CheckCircle size={10} /> Enviado</Badge>}
-      {hasReminder && <Badge tone="brand"><Bell size={10} /> Lembrete</Badge>}
-      {risk && <span title={risk.reasons.join(' · ')}><Badge tone="danger" solid><AlertTriangle size={10} /> Em risco</Badge></span>}
-    </>
+  // Etiquetas no mesmo formato (pílula de mesma altura): situação do envio + etiquetas do cliente
+  const chips = [
+    isPaid && <Chip key="paid" className="bg-ok text-white"><Wallet size={11} /> Pago</Chip>,
+    isSent && !isPaid && <Chip key="sent" className="bg-ok/15 text-ok"><CheckCircle size={11} /> Enviado</Chip>,
+    hasReminder && <Chip key="rem" className="bg-brand-soft text-brand"><Bell size={11} /> Lembrete</Chip>,
+    risk && <Chip key="risk" className="bg-danger text-white" title={risk.reasons.join(' · ')}><AlertTriangle size={11} /> Em risco</Chip>,
+    ...activeTags.map(tag => <Chip key={tag.id} style={tagStyle(tag.color)}>{tag.label}</Chip>),
+  ].filter(Boolean);
+  const chipsRow = (center?: boolean) => chips.length > 0 && (
+    <div className={cx('flex flex-wrap gap-1.5', center && 'justify-center')}>{chips}</div>
   );
 
-  const tagChips = activeTags.map(tag => (
-    <span key={tag.id} className="text-[10px] px-1.5 py-px rounded font-medium" style={tagStyle(tag.color)}>{tag.label}</span>
-  ));
+  // Linha de informação em texto: IPTV · Amanhã · 09/10/2026 (sem caixinhas)
+  const metaLine = (center?: boolean) => (
+    <div className={cx('flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs', center && 'justify-center')}>
+      <span className={cx('font-bold tracking-wide', client.type === 'p2p' ? 'text-ok' : 'text-brand')}>{client.type === 'p2p' ? 'P2P' : 'IPTV'}</span>
+      <Dot />
+      <span className={cx('font-semibold', STATUS_TEXT[status.level])}>{status.label}</span>
+      <Dot />
+      <span className="text-muted">{formatDate(client.dueDate)}</span>
+      {hasLinkedClients && <><Dot /><span className="text-info font-medium">+{client.linked!.length} vinculada(s)</span></>}
+      {isCustomMessage && <><Dot /><span className="text-brand inline-flex items-center gap-0.5"><PenTool size={10} /> Personalizada</span></>}
+    </div>
+  );
 
   const templatePicker = templates.length > 0 && (
     <label className="relative inline-flex items-center gap-1.5 text-xs text-muted border border-line rounded-md px-2 py-1.5 bg-card hover:bg-subtle cursor-pointer" title="Modelo da mensagem">
@@ -275,7 +298,7 @@ const ClientCard: React.FC<ClientCardProps> = ({
           </div>
           <div className="text-xs text-muted">{formatDate(client.dueDate)}</div>
           <div className="text-xs text-muted font-mono truncate hidden md:block">{displayPhone || '—'}</div>
-          <div className="hidden md:flex items-center gap-1 min-w-0 overflow-hidden">{statusBadges}{tagChips}</div>
+          <div className="hidden md:flex items-center gap-1.5 min-w-0 overflow-hidden">{chips}</div>
         </div>
         <Button size="icon" variant="ghost" onClick={() => onPay(client)} title="Registrar pagamento"><Wallet size={15} /></Button>
         {whatsappIconButton(15)}
@@ -289,21 +312,12 @@ const ClientCard: React.FC<ClientCardProps> = ({
       <div ref={rootRef} className={cx('bg-card rounded-md border border-line/60 shadow-card transition-colors hover:border-brand/30 scroll-mt-4', (isSent || isPaid) && 'opacity-70')}>
         <div className="flex items-center gap-3 px-4 py-3 cursor-pointer select-none" onClick={() => setIsCollapsed(false)}>
           <span className="w-1 self-stretch rounded-full flex-shrink-0" style={{ backgroundColor: status.color }} />
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <TypeTag type={client.type} />
-              <span className="text-sm font-medium text-ink"><HighlightedText text={client.name} query={searchQuery} /></span>
-              {hasLinkedClients && <span className="text-[10px] text-info font-medium">+{client.linked!.length} vinculada(s)</span>}
-              {isCustomMessage && <span className="text-[10px] text-brand flex items-center gap-0.5"><PenTool size={9} /> Personalizada</span>}
-            </div>
-            <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-              <Badge tone={status.tone}>{status.label}</Badge>
-              <span className="text-xs text-muted">{formatDate(client.dueDate)}</span>
-              {statusBadges}
-              {tagChips}
-            </div>
+          <div className="flex-1 min-w-0 space-y-1.5">
+            <p className="text-[15px] font-medium text-ink leading-snug break-words"><HighlightedText text={client.name} query={searchQuery} /></p>
+            {metaLine()}
+            {chipsRow()}
             {client.customNotes && (
-              <p className="mt-1.5 inline-flex max-w-full items-start gap-1.5 text-xs font-medium text-ink bg-warn/25 rounded px-2 py-1">
+              <p className="inline-flex max-w-full items-start gap-1.5 text-xs font-medium text-ink bg-warn/25 rounded px-2 py-1">
                 <StickyNote size={12} className="text-ink/70 flex-shrink-0 mt-px" />
                 <span className="min-w-0 break-words"><HighlightedText text={client.customNotes} query={searchQuery} /></span>
               </p>
@@ -324,37 +338,33 @@ const ClientCard: React.FC<ClientCardProps> = ({
   return (
     <div ref={rootRef} className={cx('bg-card border border-line/60 rounded-md flex flex-col overflow-hidden scroll-mt-4', isFocusMode ? 'shadow-pop max-h-full' : 'shadow-card')}>
       {!isFocusMode && (
-        <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-line cursor-pointer select-none" onClick={collapse}>
-          <div className="flex items-center gap-2 min-w-0 flex-wrap">
-            <TypeTag type={client.type} />
-            <span className="text-sm font-medium text-ink">{client.name}</span>
-            <Badge tone={status.tone}>{status.label}</Badge>
-            {statusBadges}
+        <div className="flex items-start justify-between gap-3 px-4 py-3 border-b border-line cursor-pointer select-none" onClick={collapse}>
+          <div className="min-w-0 space-y-1.5">
+            <p className="text-[15px] font-medium text-ink leading-snug break-words">{client.name}</p>
+            {metaLine()}
+            {chipsRow()}
           </div>
-          <ChevronUp size={15} className="text-muted flex-shrink-0" />
+          <ChevronUp size={16} className="text-muted flex-shrink-0 mt-0.5" />
         </div>
       )}
 
       <div className={cx('flex-1 flex flex-col min-h-0 overflow-y-auto', isFocusMode ? 'p-4 sm:p-8' : 'p-4')}>
         {isFocusMode && (
           <div className="mb-5 text-center">
-            <h2 className="text-xl sm:text-2xl font-medium text-ink flex items-center justify-center gap-2"><TypeTag type={client.type} />{client.name}</h2>
-            <div className="flex items-center justify-center gap-1.5 mt-2 flex-wrap">
-              <Badge tone={status.tone}>{status.label}</Badge>
-              <span className="text-sm text-muted">{statusText}</span>
-              {statusBadges}
-              {tagChips}
+            <h2 className="text-xl sm:text-2xl font-medium text-ink break-words">{client.name}</h2>
+            <div className="mt-2 space-y-2">
+              {metaLine(true)}
+              {chipsRow(true)}
             </div>
-            <p className="font-mono text-sm text-muted mt-1">{displayPhone || <span className="italic">sem telefone</span>}</p>
+            <p className="font-mono text-sm text-muted mt-2">{displayPhone || <span className="italic">sem telefone</span>}</p>
             {hasLinkedClients && (
               <p className="text-xs text-info mt-1 flex items-center justify-center gap-1"><LinkIcon size={11} /> {client.linked!.map(l => l.name).join(', ')}</p>
             )}
           </div>
         )}
 
-        {!isFocusMode && (activeTags.length > 0 || hasLinkedClients) && (
+        {!isFocusMode && hasLinkedClients && (
           <div className="mb-3 space-y-2">
-            {activeTags.length > 0 && <div className="flex flex-wrap gap-1">{tagChips}</div>}
             {hasLinkedClients && (
               <div className="border border-info/30 bg-info/5 rounded-md px-3 py-2 text-xs text-ink">
                 <p className="font-medium text-info flex items-center gap-1 mb-1"><LinkIcon size={11} /> Contas vinculadas ({client.linked!.length})</p>
