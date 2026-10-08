@@ -258,10 +258,7 @@ const ClientCard: React.FC<ClientCardProps> = ({
   const dueDay = `${String(due.getDate()).padStart(2, '0')}/${String(due.getMonth() + 1).padStart(2, '0')}${due.getFullYear() !== new Date().getFullYear() ? `/${due.getFullYear()}` : ''}`;
   const metaLine = (center?: boolean) => (
     <div className={cx('flex flex-wrap items-center gap-x-2 gap-y-1 text-xs', center && 'justify-center')}>
-      <span
-        className={cx('inline-flex items-center gap-1.5 h-6 px-2 rounded-md font-semibold whitespace-nowrap', STATUS_TEXT[status.level])}
-        style={{ backgroundColor: `${status.color}1F` }}
-      >
+      <span className={cx('inline-flex items-center gap-1.5 font-semibold whitespace-nowrap', STATUS_TEXT[status.level])}>
         <CalendarDays size={13} className="flex-shrink-0" />
         {status.label}
         <span className="opacity-40">·</span>
