@@ -41,4 +41,6 @@
     <!-- Lembretes e resumo diário na hora exata (Android 13+ concede sozinho; o plugin já pede SCHEDULE_EXACT_ALARM para o 12) -->
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Atualização dentro do app: abrir o instalador do APK baixado -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 </manifest>

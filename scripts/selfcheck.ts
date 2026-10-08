@@ -5,6 +5,7 @@ import { toWhatsappNumber, processSpinSyntax, extractPhone } from '../utils/help
 import { buildPixPayload, crc16, normalizePixKey } from '../utils/pix';
 import { addMonthsClamped, dueStatus, monthsFromLabel, lastPaymentByName, isRecentlyPaid, forecastRevenue, riskByName, dailySummary, dailyMessage, DEFAULT_NOTIFY } from '../utils/billing';
 import { DEFAULT_CONFIG } from '../constants';
+import { parseTag, parseNotes } from '../utils/updates';
 import * as syncApi from '../api/sync';
 import * as dailyApi from '../api/daily';
 import * as pushApi from '../api/push';
@@ -98,6 +99,12 @@ const sep = '\n\n';
 assert.equal(mergeImport(iptvA + sep + p2p, iptvB), p2p + sep + iptvB);
 assert.equal(mergeImport(iptvA + sep + p2p, 'texto livre'), 'texto livre');
 assert.equal(mergeImport('', iptvA), iptvA);
+
+// Atualizações: tag da Release -> versão/build; corpo -> lista de novidades
+assert.deepEqual(parseTag('apk-v2.0.17'), { version: '2.0.17', build: 17 });
+assert.equal(parseTag('v1.2'), null);
+const releaseBody = ['## Novidades', '- Novo: ficha do cliente', '- Correção: tela branca', '', 'Instala por cima.'].join('\n');
+assert.deepEqual(parseNotes(releaseBody), ['Novo: ficha do cliente', 'Correção: tela branca']);
 
 // Spin só sorteia blocos com "|"
 assert.equal(processSpinSyntax('{pix} {plano1}'), '{pix} {plano1}');

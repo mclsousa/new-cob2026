@@ -10,6 +10,7 @@
     "check": "esbuild scripts/selfcheck.ts --bundle --platform=node --log-level=error --outfile=node_modules/.cache/selfcheck.cjs && node node_modules/.cache/selfcheck.cjs"
   },
   "dependencies": {
+    "@capacitor-community/file-opener": "^8.0.1",
     "@capacitor/android": "^8.5.3",
     "@capacitor/app": "^8.1.2",
     "@capacitor/core": "^8.5.3",

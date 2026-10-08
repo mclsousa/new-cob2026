@@ -6,11 +6,12 @@ import { SYNC_KEYS } from '../utils/syncKeys';
 import { markDirty } from '../utils/sync';
 import { saveFile, isNative } from '../utils/native';
 import NativeNotifySection from '../components/NativeNotifySection';
+import type { AppUpdate, InstalledVersion } from '../utils/updates';
 import SyncSection from '../components/SyncSection';
 import PushSection from '../components/PushSection';
 import { Card, Button, PageHeader, Modal, InfoTip, SwitchRow, inputCls, labelCls, cx, tagStyle } from '../components/ui';
 import { notifySettings, dailyMessage } from '../utils/billing';
-import { Save, Download, Upload, Clock, Plus, Trash2, Tag, CreditCard, Check, X, KeyRound, Cloud, MessageSquareText, Receipt, Database, AlertTriangle, BellRing, SlidersHorizontal } from 'lucide-react';
+import { Save, Download, Upload, Clock, Plus, Trash2, Tag, CreditCard, Check, X, KeyRound, Cloud, MessageSquareText, Receipt, Database, AlertTriangle, BellRing, SlidersHorizontal, Smartphone, RefreshCw, Loader2 } from 'lucide-react';
 
 type Tab = 'general' | 'templates' | 'plans' | 'notifications' | 'tags' | 'data';
 const TABS: { id: Tab; label: string; icon: typeof Tag }[] = [
@@ -29,9 +30,14 @@ interface SettingsProps {
   onSave: (newConfig: AppConfig) => void;
   onToast: (text: string, type?: 'success' | 'error' | 'info' | 'warning') => void;
   counts: { clients: number; payments: number; history: number };
+  appVersion: InstalledVersion | null; // null no navegador
+  update: AppUpdate | null;
+  onCheckUpdate: () => Promise<void>;
+  onOpenUpdate: () => void;
 }
 
-const Settings: React.FC<SettingsProps> = ({ config, onSave, onToast, counts }) => {
+const Settings: React.FC<SettingsProps> = ({ config, onSave, onToast, counts, appVersion, update, onCheckUpdate, onOpenUpdate }) => {
+  const [checking, setChecking] = useState(false);
   const [local, setLocal] = useState<AppConfig>(config);
   const [tab, setTab] = useState<Tab>('general');
   const [selectedGroup, setSelectedGroup] = useState('default');
@@ -183,6 +189,33 @@ const Settings: React.FC<SettingsProps> = ({ config, onSave, onToast, counts }) 
 
           <Card title={<span className="flex items-center gap-2"><Cloud size={15} className="text-brand" /> Sincronização na nuvem</span>} className="lg:col-span-2">
             <SyncSection />
+          </Card>
+
+          <Card title={<span className="flex items-center gap-2"><Smartphone size={15} className="text-brand" /> Sobre o app</span>} className="lg:col-span-2">
+            {appVersion ? (
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex-1 min-w-[180px]">
+                  <p className="text-sm text-ink">Versão instalada <b className="font-medium">{appVersion.version}</b></p>
+                  <p className={cx('text-xs mt-0.5', update ? 'text-brand font-medium' : 'text-muted')}>
+                    {update ? `Versão ${update.version} disponível` : 'Verifica atualizações sozinho ao abrir o app'}
+                  </p>
+                </div>
+                {update ? (
+                  <Button variant="primary" icon={Download} onClick={onOpenUpdate} className="w-full sm:w-auto">Ver novidades e atualizar</Button>
+                ) : (
+                  <Button
+                    icon={checking ? Loader2 : RefreshCw}
+                    disabled={checking}
+                    className="w-full sm:w-auto"
+                    onClick={async () => { setChecking(true); await onCheckUpdate(); setChecking(false); }}
+                  >
+                    Verificar atualizações
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-muted">Versão web: sempre na última versão. No celular, use o app Android, que avisa quando há atualização.</p>
+            )}
           </Card>
         </div>
       )}

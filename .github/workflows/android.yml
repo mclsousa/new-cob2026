@@ -1,5 +1,7 @@
 # Gera o APK Android nativo (Capacitor) assinado e publica como Release no GitHub.
 # O app web vai empacotado dentro do APK, então todo push na main gera uma versão nova.
+# O app instalado consulta a última Release, avisa "Nova versão disponível" com as novidades
+# e baixa/instala o APK por dentro (utils/updates.ts).
 # Link fixo da versão mais recente:
 #   https://github.com/mclsousa/new-cob2026/releases/latest/download/TVBR.Cob.apk
 # Segredos necessários: ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD
@@ -19,6 +21,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # histórico e tags: as novidades saem dos commits desde a última versão
 
       - uses: actions/setup-node@v4
         with:
@@ -60,6 +64,21 @@ jobs:
           name: TVBR.Cob-apk
           path: TVBR.Cob.apk
 
+      # O app lê as linhas "- ..." desta lista e mostra em "O que mudou" ao avisar da atualização.
+      # Só entram commits feat/fix/perf; o resto (ci, docs, chore) fica de fora.
+      - name: Gerar novidades da versão
+        run: |
+          PREV=$(git describe --tags --match 'apk-v*' --abbrev=0 HEAD^ 2>/dev/null || true)
+          {
+            echo "## Novidades"
+            git log ${PREV:+$PREV..}HEAD --no-merges --pretty='%s' \
+              | sed -nE 's/^feat(\([^)]*\))?!?: */- Novo: /p; s/^fix(\([^)]*\))?!?: */- Correção: /p; s/^perf(\([^)]*\))?!?: */- Melhoria: /p'
+            echo
+            echo "Instala por cima da versão anterior; os dados continuam no aparelho."
+          } > notes.md
+          grep -q '^- ' notes.md || sed -i '1a - Melhoria: ajustes e correções gerais' notes.md
+          cat notes.md
+
       - name: Publicar Release
         if: github.ref == 'refs/heads/main'
         env:
@@ -67,5 +86,5 @@ jobs:
         run: |
           gh release create "apk-v2.0.${{ github.run_number }}" TVBR.Cob.apk \
             --title "TVBR.Cob Android v2.0.${{ github.run_number }}" \
-            --notes "App Android nativo do TVBR.Cob. Baixe e instale no celular (permita instalar de fontes desconhecidas). Instala por cima da versão anterior." \
+            --notes-file notes.md \
             --latest

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import {
   Sun, Moon, Search, ArrowLeft, ChevronLeft, ChevronRight, Copy, X, Rocket, Upload, AlertOctagon, Menu as MenuIcon,
   Bell, Cloud, CloudOff, RefreshCw, LayoutDashboard, Send, Users, History as HistoryIcon, Settings as SettingsIcon,
-  CheckCircle2, AlertTriangle, Info, XCircle, Sunrise,
+  CheckCircle2, AlertTriangle, Info, XCircle, Sunrise, Download,
 } from 'lucide-react';
 import { onSyncStatus, syncNow, consumeJustPulled, type SyncStatus } from './utils/sync';
 import {
@@ -21,6 +21,8 @@ import LinkClientsModal from './components/LinkClientsModal';
 import ReminderModal from './components/ReminderModal';
 import ClientProfile from './components/ClientProfile';
 import ErrorBoundary from './components/ErrorBoundary';
+import UpdateModal from './components/UpdateModal';
+import { checkForUpdate, installedVersion, AppUpdate, InstalledVersion } from './utils/updates';
 import ImportModal from './components/ImportModal';
 import { Button, Modal, Menu, cx } from './components/ui';
 import { Progress } from './components/charts';
@@ -234,6 +236,44 @@ function App() {
     reminders.filter(r => !r.fired).forEach(scheduleReminder);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // --- Atualizações do app Android: verifica ao abrir e ao voltar (no máximo a cada 3h) ---
+  const [appVersion, setAppVersion] = useState<InstalledVersion | null>(null);
+  const [update, setUpdate] = useState<AppUpdate | null>(null);
+  const [showUpdate, setShowUpdate] = useState(false);
+  const lastUpdateCheck = useRef(0);
+  useEffect(() => {
+    if (!isNative()) return;
+    void installedVersion().then(setAppVersion);
+    const check = () => {
+      if (Date.now() - lastUpdateCheck.current < 3 * 60 * 60 * 1000) return;
+      lastUpdateCheck.current = Date.now();
+      checkForUpdate().then(u => {
+        setUpdate(u);
+        // "Agora não" adia o aviso automático até o dia seguinte (o atalho no menu continua)
+        if (u && localStorage.getItem('updateSnooze') !== `${u.build}|${toInputDate(new Date())}`) setShowUpdate(true);
+      }).catch(() => undefined); // sem internet: tenta na próxima abertura
+    };
+    check();
+    const onVisible = () => { if (document.visibilityState === 'visible') check(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, []);
+  const closeUpdate = () => {
+    if (update) saveItem('updateSnooze', `${update.build}|${toInputDate(new Date())}`);
+    setShowUpdate(false);
+  };
+  const checkUpdateNow = async () => {
+    try {
+      const u = await checkForUpdate();
+      lastUpdateCheck.current = Date.now();
+      setUpdate(u);
+      if (u) setShowUpdate(true);
+      else addToast('Você já está na versão mais recente.', 'success');
+    } catch {
+      addToast('Não foi possível verificar agora. Confira a conexão.', 'error');
+    }
+  };
 
   // --- Resumo do dia: aparece na 1ª abertura de cada dia (o push das 8h cobre o app fechado) ---
   const [dailyBanner, setDailyBanner] = useState<DailySummary | null>(null);
@@ -709,7 +749,19 @@ function App() {
           })}
         </nav>
 
-        <div className="p-4 border-t border-line">
+        <div className="p-4 border-t border-line space-y-2">
+          {update && (
+            <button
+              onClick={() => { setShowUpdate(true); setIsSidebarOpen(false); }}
+              className="w-full flex items-center gap-2.5 rounded-md border border-brand/30 bg-brand-soft px-3 py-2 text-left text-brand hover:border-brand transition-colors"
+            >
+              <Download size={16} className="flex-shrink-0" />
+              <span className="min-w-0">
+                <span className="block text-sm font-medium">Atualização disponível</span>
+                <span className="block text-xs opacity-80">Versão {update.version}</span>
+              </span>
+            </button>
+          )}
           <Button variant="primary" icon={Upload} className="w-full" onClick={() => { setIsImportOpen(true); setIsSidebarOpen(false); }}>Importar lista</Button>
         </div>
       </aside>
@@ -848,6 +900,10 @@ function App() {
                 onSave={handleSaveConfig}
                 onToast={addToast}
                 counts={{ clients: clientDatabase.length, payments: payments.length, history: actionHistory.length }}
+                appVersion={appVersion}
+                update={update}
+                onCheckUpdate={checkUpdateNow}
+                onOpenUpdate={() => setShowUpdate(true)}
               />
             )}
             </ErrorBoundary>
@@ -901,6 +957,7 @@ function App() {
         onConfirm={handleConfirmPayment}
       />
       <LinkClientsModal isOpen={!!linkingClient} onClose={() => setLinkingClient(null)} masterClient={linkingClient} allClients={flatResults} onSave={handleSaveLinks} />
+      <UpdateModal update={showUpdate ? update : null} currentVersion={appVersion?.version} onClose={closeUpdate} />
       <ClientProfile
         name={profileName}
         stored={profileStored}
